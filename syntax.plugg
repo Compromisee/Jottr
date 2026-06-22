@@ -1,0 +1,103 @@
+# ============================================================
+#  syntax.plugg - Jottr plugin manifest format (v1)
+# ============================================================
+#
+#  A .plugg file is a UTF-8 text manifest that describes a plugin
+#  to Jottr. Jottr scans `*.plugg` files in its app directory at
+#  startup (and on Settings -> Plugins reload) and parses each
+#  one into a metadata dict that drives the Plugins tab in
+#  Settings.
+#
+#  Grammar (informal):
+#
+#     file          := section*
+#     section       := "=" name "=" NL (line NL)*
+#     line          := directive | key-value | comment | blank
+#     directive     := ("@name" | "feature" | "hook" | "icon") SP value
+#     key-value     := key SP+ value
+#     comment       := "#" .* (ignored)
+#     blank         := SP* NL (ignored)
+#
+#  Sections (each starts with `=name=`):
+#
+#     =meta=     Identity + descriptive metadata. REQUIRED keys:
+#                id      - short slug, lowercase, no spaces
+#                name    - human-friendly title.
+#                version - semver-ish string.
+#                author  - who wrote it.
+#                description - one or more lines of text.
+#
+#     =runtime=  How Jottr should run the plugin.
+#                module  - Python module path to import (e.g.
+#                          "plugins.encrypt_decrypt"). If omitted
+#                          Jottr treats the .plugg file as a pure
+#                          manifest and looks for a separate
+#                          plugin_id.py next to it.
+#                entry   - optional name of the register() callable
+#                          (defaults to "register").
+#                icon    - Material Symbol name for the Plugins
+#                          card (e.g. "lock", "palette").
+#
+#     =features= List of one-line feature descriptions.
+#                Syntax:  feature <short-id> - <human text>
+#
+#     =hooks=    Optional lifecycle hooks the plugin wants.
+#                Syntax:  hook <hook-name> - <description>
+#                Known hook names (all optional):
+#                  context_menu_file
+#                  context_menu_folder
+#                  before_save_note
+#                  after_save_note
+#                  on_open_note
+#                  on_close_note
+#
+#     =tags=     Free-form tags used to group plugins in the
+#                Plugins card. One per line, comma-separated.
+#
+#  Plugin runtime:
+#
+#     After parsing, Jottr does:
+#
+#         meta = parse(text)
+#         mod  = import(meta["runtime"]["module"]) if present,
+#                 else import(meta["meta"]["id"])
+#         mod.register() -> must return a dict with at least
+#             { id, name, version, description, features }
+#
+#     If the plugin defines `activate(api)`, Jottr calls it
+#     whenever the user enables the plugin in Settings; the api
+#     is the JottrAPI instance.
+#
+#     Deactivation: if `deactivate()` is defined, it's called
+#     before the user toggles the plugin off.
+#
+#  Errors:
+#
+#     * Missing required keys -> the .plugg is skipped and logged.
+#     * Unknown keys/sections -> ignored, not an error.
+#     * Module not importable  -> the plugin shows up in Settings
+#       but is marked "broken" and cannot be enabled.
+#
+#  Example (see encrypt_decrypt.plugg in the repo root):
+#
+#     =meta=
+#     id      encrypt_decrypt
+#     name    Note Encryptor
+#     version 1.0.0
+#     description
+#     Encrypt individual notes with a password.
+#
+#     =runtime=
+#     module plugins.encrypt_decrypt
+#     icon   lock
+#
+#     =features=
+#     feature encrypt_note - Encrypt a single note.
+#     feature decrypt_note - Decrypt a single note.
+#
+#     =hooks=
+#     hook context_menu_file - Add Encrypt/Decrypt to the file menu.
+#
+#     =tags=
+#     security, encryption, privacy
+# ============================================================

@@ -1,0 +1,29 @@
+# Jottr plugin manifest for the bundled Note Encryptor.
+# See syntax.plugg for the full grammar.
+
+=meta=
+id      encrypt_decrypt
+name    Note Encryptor
+version 1.0.0
+author  Jottr
+icon    lock
+description
+Encrypt individual note files with a password. Stash encrypted
+notes on USB sticks or cloud storage without exposing your text.
+Uses XOR + base64 so it has zero external dependencies.
+
+=runtime=
+module plugins.encrypt_decrypt
+icon   lock
+
+=features=
+feature encrypt_note - Encrypt a single note with a password.
+feature decrypt_note - Decrypt a single note (password required).
+feature encrypt_all   - Bulk-encrypt every note via a file picker.
+
+=hooks=
+hook context_menu_file   - Add Encrypt/Decrypt to the file context menu.
+hook context_menu_folder - Add Encrypt all/Decrypt all to the folder menu.
+
+=tags=
+security, encryption, privacy
