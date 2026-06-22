@@ -1,0 +1,458 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Jottr</title>
+<link rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" />
+<link rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,200..700,0..1,-50..200" />
+<link rel="stylesheet" href="style.css" />
+</head>
+<body data-theme="midnight">
+
+<!-- ============================================================ PIN overlay -->
+<div id="pin-overlay" class="overlay hidden" aria-hidden="true">
+  <div class="pin-card">
+    <span class="material-symbols-outlined pin-icon">lock</span>
+    <h2>Jottr is locked</h2>
+    <p>Enter your PIN to continue</p>
+    <input id="pin-input" type="password" inputmode="numeric"
+           autocomplete="off" maxlength="32" placeholder="PIN" />
+    <div class="pin-actions">
+      <button id="pin-unlock" class="btn primary">Unlock</button>
+    </div>
+    <div id="pin-error" class="pin-error"></div>
+  </div>
+</div>
+
+<!-- ============================================================ App shell -->
+<div id="app" class="app hidden">
+
+  <!-- ---------- Title bar / window chrome (custom) --------------------- -->
+  <header class="titlebar">
+    <div class="titlebar-left">
+      <div class="brand">
+        <span class="brand-mark"></span>
+        <span class="brand-name">Jottr</span>
+      </div>
+    </div>
+    <div class="titlebar-tabs" id="tabbar"><!-- tabs injected here --></div>
+    <div class="titlebar-right">
+      <button class="iconbtn" id="btn-preview" title="Toggle preview (Ctrl+Shift+V)">
+        <span class="material-symbols-outlined">visibility</span>
+      </button>
+      <button class="iconbtn" id="btn-find" title="Find (Ctrl+F)">
+        <span class="material-symbols-outlined">search</span>
+      </button>
+      <button class="iconbtn" id="btn-home" title="Home">
+        <span class="material-symbols-outlined">cottage</span>
+      </button>
+      <button class="iconbtn" id="btn-settings" title="Settings">
+        <span class="material-symbols-outlined">settings</span>
+      </button>
+      <button class="iconbtn" id="btn-tray" title="Minimize to tray">
+        <span class="material-symbols-outlined">remove</span>
+      </button>
+      <button class="iconbtn" id="btn-quit" title="Quit">
+        <span class="material-symbols-outlined">close</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- ---------- Main two-pane layout ------------------------------------ -->
+  <div class="layout">
+
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <section class="side-section">
+        <h3>Quick</h3>
+        <button class="side-action" id="quick-new-note">
+          <span class="material-symbols-outlined">note_add</span>
+          <span>New Note</span>
+          <kbd>Ctrl N</kbd>
+        </button>
+        <button class="side-action" id="quick-new-todo">
+          <span class="material-symbols-outlined">checklist</span>
+          <span>New Todo</span>
+          <kbd>Ctrl T</kbd>
+        </button>
+        <button class="side-action" id="quick-open">
+          <span class="material-symbols-outlined">folder_open</span>
+          <span>Open&hellip;</span>
+          <kbd>Ctrl O</kbd>
+        </button>
+      </section>
+
+      <section class="side-section">
+        <h3>
+          <span>Pinned</span>
+          <span class="material-symbols-outlined side-h-icon">push_pin</span>
+        </h3>
+        <ul class="recent-list" id="pinned-list">
+          <li class="side-empty">No pinned notes yet</li>
+        </ul>
+      </section>
+
+      <section class="side-section">
+        <h3>Recent</h3>
+        <ul class="recent-list" id="recent-list">
+          <li data-open-file="ideas.md">
+            <span class="material-symbols-outlined">description</span>
+            <span>ideas.md</span>
+          </li>
+          <li data-open-file="launch-plan.md">
+            <span class="material-symbols-outlined">description</span>
+            <span>launch-plan.md</span>
+          </li>
+          <li data-open-file="secret.md">
+            <span class="material-symbols-outlined">description</span>
+            <span>secret.md</span>
+          </li>
+          <li data-open-file="today.txt">
+            <span class="material-symbols-outlined">description</span>
+            <span>today.txt</span>
+          </li>
+        </ul>
+      </section>
+
+      <section class="side-section">
+        <h3>Stats</h3>
+        <div class="stat-row">
+          <span class="material-symbols-outlined stat-ico">local_fire_department</span>
+          <div>
+            <div class="stat-value" id="stat-streak">0</div>
+            <div class="stat-label">day streak</div>
+          </div>
+        </div>
+        <div class="stat-row">
+          <span class="material-symbols-outlined stat-ico">schedule</span>
+          <div>
+            <div class="stat-value" id="stat-minutes">0</div>
+            <div class="stat-label">min today</div>
+          </div>
+        </div>
+        <div class="stat-row">
+          <span class="material-symbols-outlined stat-ico">data_object</span>
+          <div>
+            <div class="stat-value" id="stat-words">0</div>
+            <div class="stat-label">words all-time</div>
+          </div>
+        </div>
+      </section>
+    </aside>
+
+    <!-- Workspace -->
+    <main class="workspace" id="workspace">
+      <!-- Home screen with widgets + analytics -->
+      <section id="home-screen" class="home-screen hidden">
+        <div class="home-hero">
+          <h1>Welcome back</h1>
+          <p>Pick up where you left off, or start something new.</p>
+        </div>
+        <div class="home-grid">
+          <div class="widget widget-streak">
+            <div class="widget-head">
+              <span class="material-symbols-outlined">local_fire_department</span>
+              <h4>7-day streak</h4>
+            </div>
+            <div class="streak-bars" id="streak-bars">
+              <div class="bar" style="height:6px"></div>
+              <div class="bar" style="height:6px"></div>
+              <div class="bar" style="height:6px"></div>
+              <div class="bar" style="height:6px"></div>
+              <div class="bar" style="height:6px"></div>
+              <div class="bar" style="height:6px"></div>
+              <div class="bar" style="height:6px"></div>
+            </div>
+            <div class="streak-bars-labels">
+              <span>S</span><span>M</span><span>T</span><span>W</span>
+              <span>T</span><span>F</span><span>S</span>
+            </div>
+            <div class="streak-foot" id="streak-foot">0 day streak - keep it going!</div>
+          </div>
+          <div class="widget widget-quick">
+            <div class="widget-head">
+              <span class="material-symbols-outlined">bolt</span>
+              <h4>Quick actions</h4>
+            </div>
+            <button class="qa" data-action="new-note">
+              <span class="material-symbols-outlined">note_add</span>
+              New note
+            </button>
+            <button class="qa" data-action="new-todo">
+              <span class="material-symbols-outlined">checklist</span>
+              New todo
+            </button>
+            <button class="qa" data-action="open">
+              <span class="material-symbols-outlined">folder_open</span>
+              Open file&hellip;
+            </button>
+            <button class="qa" data-action="lock">
+              <span class="material-symbols-outlined">lock</span>
+              Lock now
+            </button>
+            <button class="qa" data-action="theme">
+              <span class="material-symbols-outlined">contrast</span>
+              Cycle theme
+            </button>
+          </div>
+          <div class="widget widget-recent">
+            <div class="widget-head">
+              <span class="material-symbols-outlined">history</span>
+              <h4>Recent files</h4>
+            </div>
+            <ul id="home-recent" class="home-recent">
+              <li data-open-file="ideas.md">
+                <span class="material-symbols-outlined">description</span>
+                <span>ideas.md</span>
+              </li>
+              <li data-open-file="launch-plan.md">
+                <span class="material-symbols-outlined">description</span>
+                <span>launch-plan.md</span>
+              </li>
+              <li data-open-file="secret.md">
+                <span class="material-symbols-outlined">description</span>
+                <span>secret.md</span>
+              </li>
+              <li data-open-file="today.txt">
+                <span class="material-symbols-outlined">description</span>
+                <span>today.txt</span>
+              </li>
+            </ul>
+          </div>
+          <div class="widget widget-tip">
+            <div class="widget-head">
+              <span class="material-symbols-outlined">tips_and_updates</span>
+              <h4>Tip</h4>
+            </div>
+            <p>
+              Type <code>**todolist**</code> in any blank note to turn it into
+              a todo list. Press <kbd>Enter</kbd> for a new item, click the box
+              to mark it done.
+            </p>
+            <p>
+              Paste a list of lines into a todo and each line becomes its
+              own item. Toggle preview with <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>V</kbd>.
+            </p>
+            <p>
+              Press <kbd>Ctrl</kbd>+<kbd>F</kbd> to find inside the open note.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Editor surface (one per visible tab) -->
+      <section id="editor-surface" class="editor-surface">
+        <div class="empty-editor" id="empty-editor">
+          <span class="material-symbols-outlined big-icon">edit_note</span>
+          <h2>Nothing open</h2>
+          <p>Create a new note or pick one from Recent to get started.</p>
+          <div class="empty-actions">
+            <button class="btn primary" id="empty-new-note">
+              <span class="material-symbols-outlined">note_add</span> New note
+            </button>
+            <button class="btn" id="empty-new-todo">
+              <span class="material-symbols-outlined">checklist</span> New todo
+            </button>
+          </div>
+          <div class="drop-hint" id="drop-hint">
+            <span class="material-symbols-outlined">file_download</span>
+            Drop .md or .txt files anywhere to import
+          </div>
+        </div>
+        <!-- editors get injected here -->
+      </section>
+    </main>
+  </div>
+
+  <!-- ---------- Status bar --------------------------------------------- -->
+  <footer class="statusbar">
+    <span id="status-mode">Edit</span>
+    <span class="status-sep"></span>
+    <span id="status-pos">Ln 1, Col 1</span>
+    <span class="status-sep"></span>
+    <span id="status-lang">Markdown</span>
+    <span class="status-sep"></span>
+    <span id="status-enc">UTF-8</span>
+    <span class="status-sep"></span>
+    <span id="status-eol">LF</span>
+    <span class="status-spacer"></span>
+    <span id="status-saved" class="saved-pulse">
+      <span class="material-symbols-outlined tiny">cloud_done</span>
+      <span id="status-saved-text">All changes saved</span>
+    </span>
+    <span class="status-sep"></span>
+    <span id="status-count">0 words / 0 chars</span>
+  </footer>
+</div>
+
+<!-- ============================================================ Settings modal -->
+<div id="settings-modal" class="overlay hidden" aria-hidden="true">
+  <div class="modal-card wide">
+    <header class="modal-head">
+      <h2>Settings</h2>
+      <button class="iconbtn" id="settings-close">
+        <span class="material-symbols-outlined">close</span>
+      </button>
+    </header>
+
+    <div class="modal-body grid-2">
+      <section>
+        <h4>Appearance</h4>
+        <label class="field">
+          <span>Theme</span>
+          <select id="set-theme">
+            <option value="midnight">Midnight (dark)</option>
+            <option value="graphite">Graphite (dark)</option>
+            <option value="dusk">Dusk (warm dark)</option>
+            <option value="paper">Paper (light)</option>
+            <option value="solar">Solarized</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>Font size</span>
+          <input id="set-fontsize" type="number" min="10" max="28" step="1" value="14" />
+        </label>
+        <label class="field toggle">
+          <span>Show line numbers</span>
+          <input type="checkbox" id="set-lineno" checked />
+        </label>
+        <label class="field toggle">
+          <span>Word wrap</span>
+          <input type="checkbox" id="set-wrap" />
+        </label>
+      </section>
+
+      <section>
+        <h4>Security</h4>
+        <label class="field">
+          <span>App PIN (leave blank to keep)</span>
+          <input id="set-pin" type="password" placeholder="*******" autocomplete="off" />
+        </label>
+        <label class="field">
+          <span>PIN scope</span>
+          <select id="set-pin-scope">
+            <option value="app">App-wide (single PIN)</option>
+            <option value="per_file">Per file (file header)</option>
+          </select>
+        </label>
+      </section>
+
+      <section>
+        <h4>Behavior</h4>
+        <label class="field toggle">
+          <span>Launch at Windows startup</span>
+          <input type="checkbox" id="set-startup" />
+        </label>
+        <label class="field toggle">
+          <span>Minimize to tray</span>
+          <input type="checkbox" id="set-tray" checked />
+        </label>
+        <label class="field">
+          <span>Global hotkey (toggle window)</span>
+          <input id="set-hotkey" type="text" placeholder="ctrl+alt+j" />
+        </label>
+        <label class="field toggle">
+          <span>Default to preview mode for new notes</span>
+          <input type="checkbox" id="set-preview-default" />
+        </label>
+      </section>
+
+      <section>
+        <h4>Integration</h4>
+        <label class="field toggle">
+          <span>Add "Open with Jottr" to Explorer context menu</span>
+          <input type="checkbox" id="set-context" />
+        </label>
+        <p class="hint">
+          Context menu and startup hooks only take effect on Windows. Changes
+          are applied immediately to your user registry.
+        </p>
+      </section>
+    </div>
+
+    <footer class="modal-foot">
+      <button class="btn" id="settings-cancel">Cancel</button>
+      <button class="btn primary" id="settings-save">Save</button>
+    </footer>
+  </div>
+</div>
+
+<!-- ============================================================ Find/Replace modal -->
+<div id="find-modal" class="overlay hidden" aria-hidden="true">
+  <div class="modal-card find-card">
+    <header class="modal-head">
+      <h2>Find</h2>
+      <button class="iconbtn" id="find-close">
+        <span class="material-symbols-outlined">close</span>
+      </button>
+    </header>
+
+    <div class="modal-body">
+      <label class="field">
+        <span>Find</span>
+        <input id="find-input" type="text" placeholder="Search..." autocomplete="off" />
+      </label>
+      <label class="field">
+        <span>Replace with</span>
+        <input id="replace-input" type="text" placeholder="Replace with..." autocomplete="off" />
+      </label>
+      <div class="find-row">
+        <span id="find-count" class="hint">No matches</span>
+        <span class="status-spacer" style="flex:1"></span>
+        <button class="btn" id="find-prev">
+          <span class="material-symbols-outlined">arrow_upward</span>
+        </button>
+        <button class="btn" id="find-next">
+          <span class="material-symbols-outlined">arrow_downward</span>
+        </button>
+        <button class="btn" id="find-replace-one">
+          <span class="material-symbols-outlined">find_replace</span> Replace
+        </button>
+        <button class="btn" id="find-replace-all">
+          <span class="material-symbols-outlined">done_all</span> All
+        </button>
+      </div>
+      <label class="field toggle">
+        <span>Case sensitive</span>
+        <input type="checkbox" id="find-case" />
+      </label>
+      <label class="field toggle">
+        <span>Whole word</span>
+        <input type="checkbox" id="find-word" />
+      </label>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ Context menu -->
+<div id="ctx-menu" class="ctx-menu hidden" role="menu">
+  <button data-act="open" role="menuitem">
+    <span class="material-symbols-outlined">open_in_new</span> Open
+  </button>
+  <button data-act="pin" role="menuitem" id="ctx-pin">
+    <span class="material-symbols-outlined">push_pin</span> <span class="ctx-pin-label">Pin to sidebar</span>
+  </button>
+  <button data-act="reveal" role="menuitem">
+    <span class="material-symbols-outlined">folder</span> Reveal in Explorer
+  </button>
+  <button data-act="setpin" role="menuitem">
+    <span class="material-symbols-outlined">lock</span> Set per-file PIN
+  </button>
+  <div class="ctx-sep"></div>
+  <button data-act="rename" role="menuitem">
+    <span class="material-symbols-outlined">drive_file_rename_outline</span> Rename
+  </button>
+  <button data-act="delete" class="danger" role="menuitem">
+    <span class="material-symbols-outlined">delete</span> Delete
+  </button>
+</div>
+
+<!-- ============================================================ Toast -->
+<div id="toast" class="toast hidden"></div>
+
+<script src="app.js"></script>
+</body>
+</html>

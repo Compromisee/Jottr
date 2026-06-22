@@ -1,0 +1,130 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 600" width="900" height="600" role="img" aria-label="Jottr editor screenshot">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#0b0b14"/>
+      <stop offset="100%" stop-color="#11111c"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#7c5cff"/>
+      <stop offset="100%" stop-color="#b69bff"/>
+    </linearGradient>
+    <linearGradient id="glow" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#7c5cff" stop-opacity="0"/>
+      <stop offset="50%" stop-color="#7c5cff" stop-opacity="0.25"/>
+      <stop offset="100%" stop-color="#7c5cff" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+
+  <!-- background -->
+  <rect width="900" height="600" fill="url(#bg)"/>
+
+  <!-- titlebar -->
+  <rect x="0" y="0" width="900" height="40" fill="#0e0e18" stroke="rgba(255,255,255,0.06)"/>
+  <g transform="translate(12,12)">
+    <rect x="0" y="0" width="16" height="16" rx="4" fill="url(#accent)"/>
+    <text x="24" y="13" font-family="Inter, system-ui" font-size="13" font-weight="600" fill="#e8e8f0">Jottr</text>
+  </g>
+  <!-- tabs -->
+  <g font-family="Inter, system-ui" font-size="12">
+    <rect x="120" y="8" width="120" height="24" rx="6" fill="#161624" stroke="rgba(255,255,255,0.08)"/>
+    <text x="132" y="24" fill="#e8e8f0">ideas.md</text>
+    <rect x="244" y="8" width="120" height="24" rx="6" fill="transparent"/>
+    <text x="256" y="24" fill="#9c9cb0">today.txt</text>
+    <rect x="368" y="8" width="120" height="24" rx="6" fill="transparent"/>
+    <text x="380" y="24" fill="#9c9cb0">secret.md</text>
+    <text x="500" y="24" fill="#9c9cb0">+</text>
+  </g>
+  <g transform="translate(820,12)">
+    <rect width="20" height="20" rx="5" fill="#161624"/>
+    <text x="32" y="14" fill="#9c9cb0" font-family="Inter" font-size="11">settings</text>
+  </g>
+
+  <!-- sidebar -->
+  <rect x="0" y="40" width="220" height="535" fill="rgba(15,15,24,0.7)" stroke="rgba(255,255,255,0.06)"/>
+  <g font-family="Inter" font-size="10" letter-spacing="1.2">
+    <text x="20" y="76" fill="#6a6a82" font-weight="700">QUICK</text>
+    <text x="20" y="186" fill="#6a6a82" font-weight="700">RECENT</text>
+    <text x="20" y="356" fill="#6a6a82" font-weight="700">STATS</text>
+  </g>
+  <g font-family="Inter" font-size="12" fill="#e8e8f0">
+    <rect x="14" y="86" width="192" height="28" rx="7" fill="#161624"/>
+    <text x="28" y="104">New Note</text>
+    <rect x="14" y="118" width="192" height="28" rx="7" fill="transparent"/>
+    <text x="28" y="136">New Todo</text>
+    <rect x="14" y="150" width="192" height="28" rx="7" fill="transparent"/>
+    <text x="28" y="168">Open...</text>
+
+    <rect x="14" y="198" width="192" height="24" rx="6" fill="rgba(124,92,255,0.18)"/>
+    <text x="28" y="214">ideas.md</text>
+    <rect x="14" y="226" width="192" height="24" rx="6" fill="transparent"/>
+    <text x="28" y="242">launch-plan.md</text>
+    <rect x="14" y="254" width="192" height="24" rx="6" fill="transparent"/>
+    <text x="28" y="270">secret.md</text>
+    <rect x="14" y="282" width="192" height="24" rx="6" fill="transparent"/>
+    <text x="28" y="298">today.txt</text>
+  </g>
+
+  <g font-family="Inter" font-size="11">
+    <text x="20" y="384" fill="#e8e8f0" font-size="18" font-weight="700">7</text>
+    <text x="48" y="384" fill="#9c9cb0">day streak</text>
+    <text x="20" y="418" fill="#e8e8f0" font-size="18" font-weight="700">42</text>
+    <text x="48" y="418" fill="#9c9cb0">min today</text>
+  </g>
+
+  <!-- editor -->
+  <g transform="translate(220,40)">
+    <rect width="680" height="535" fill="#0b0b14"/>
+    <!-- gutter -->
+    <g font-family="JetBrains Mono, monospace" font-size="13" fill="#6a6a82" text-anchor="end">
+      <text x="50" y="46">1</text>
+      <text x="50" y="68">2</text>
+      <text x="50" y="90">3</text>
+      <text x="50" y="112">4</text>
+      <text x="50" y="134">5</text>
+      <text x="50" y="156">6</text>
+      <text x="50" y="178">7</text>
+      <text x="50" y="200">8</text>
+      <text x="50" y="222">9</text>
+    </g>
+    <line x1="60" y1="20" x2="60" y2="535" stroke="rgba(255,255,255,0.05)"/>
+    <!-- code -->
+    <g font-family="JetBrains Mono, monospace" font-size="14">
+      <text x="76" y="46" fill="#9c9cb0"># Jottr release notes</text>
+      <text x="76" y="90" fill="#e8e8f0">
+        Jottr is a <tspan fill="#b69bff">tabbed</tspan> notepad with
+        <tspan fill="#98e89a">"atomic"</tspan> auto-save,
+      </text>
+      <text x="76" y="112" fill="#e8e8f0">
+        PIN-protected files, a Windows-style
+        <tspan fill="#b69bff">home screen</tspan>
+      </text>
+      <text x="76" y="134" fill="#e8e8f0">
+        and a tiny
+        <tspan fill="#98e89a">todo list</tspan> that appears whenever you
+      </text>
+      <text x="76" y="156" fill="#e8e8f0">
+        type <tspan fill="#ffb86b">**todolist**</tspan> into a blank note.
+      </text>
+      <text x="76" y="200" fill="#6a6a82" font-style="italic">// Press Ctrl+T to start a new todo list</text>
+      <text x="76" y="222" fill="#6a6a82" font-style="italic">// Press Ctrl+Shift+L to lock the window</text>
+    </g>
+  </g>
+
+  <!-- statusbar -->
+  <rect x="0" y="575" width="900" height="25" fill="rgba(11,11,20,0.85)" stroke="rgba(255,255,255,0.06)"/>
+  <g font-family="Inter" font-size="11" fill="#9c9cb0">
+    <text x="14" y="592">Ln 5, Col 58</text>
+    <line x1="92" y1="582" x2="92" y2="594" stroke="rgba(255,255,255,0.12)"/>
+    <text x="100" y="592">Markdown</text>
+    <line x1="158" y1="582" x2="158" y2="594" stroke="rgba(255,255,255,0.12)"/>
+    <text x="166" y="592">UTF-8</text>
+    <line x1="210" y1="582" x2="210" y2="594" stroke="rgba(255,255,255,0.12)"/>
+    <text x="218" y="592">LF</text>
+    <text x="700" y="592" fill="#58e1a8">Saved 2s ago</text>
+    <line x1="780" y1="582" x2="780" y2="594" stroke="rgba(255,255,255,0.12)"/>
+    <text x="788" y="592">162 words / 952 chars</text>
+  </g>
+
+  <!-- accent glow strip -->
+  <rect x="0" y="572" width="900" height="1.5" fill="url(#glow)"/>
+</svg>

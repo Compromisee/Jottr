@@ -1,0 +1,9 @@
+# Runtime
+pywebview>=4.4
+pystray>=0.19.5
+Pillow>=10.0.0
+keyboard>=0.13.5
+
+# Build (optional)
+pyinstaller>=6.0
+pyinstaller-hooks-contrib>=2024.1

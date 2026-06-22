@@ -1,0 +1,88 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 600" width="900" height="600" role="img" aria-label="Jottr home screen">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#0b0b14"/>
+      <stop offset="100%" stop-color="#11111c"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#7c5cff"/>
+      <stop offset="100%" stop-color="#b69bff"/>
+    </linearGradient>
+  </defs>
+  <rect width="900" height="600" fill="url(#bg)"/>
+  <rect x="0" y="0" width="900" height="40" fill="#0e0e18" stroke="rgba(255,255,255,0.06)"/>
+  <g transform="translate(12,12)">
+    <rect width="16" height="16" rx="4" fill="url(#accent)"/>
+    <text x="24" y="13" font-family="Inter, system-ui" font-size="13" font-weight="600" fill="#e8e8f0">Jottr</text>
+  </g>
+
+  <!-- sidebar mini -->
+  <rect x="0" y="40" width="220" height="535" fill="rgba(15,15,24,0.7)" stroke="rgba(255,255,255,0.06)"/>
+
+  <!-- home content -->
+  <g transform="translate(260,80)">
+    <text font-family="Inter" font-size="28" font-weight="700" fill="#e8e8f0">Welcome back</text>
+    <text y="28" font-family="Inter" font-size="14" fill="#9c9cb0">Pick up where you left off, or start something new.</text>
+  </g>
+
+  <!-- streak widget -->
+  <g transform="translate(260,160)">
+    <rect width="280" height="170" rx="14" fill="#11111c" stroke="rgba(255,255,255,0.06)"/>
+    <text x="20" y="32" font-family="Inter" font-size="12" letter-spacing="0.6" fill="#9c9cb0" font-weight="600">7-DAY STREAK</text>
+    <g transform="translate(20,60)">
+      <rect x="0" y="40" width="32" height="50" rx="6" fill="url(#accent)"/>
+      <rect x="40" y="60" width="32" height="30" rx="6" fill="rgba(124,92,255,0.3)"/>
+      <rect x="80" y="30" width="32" height="60" rx="6" fill="url(#accent)"/>
+      <rect x="120" y="50" width="32" height="40" rx="6" fill="rgba(124,92,255,0.3)"/>
+      <rect x="160" y="20" width="32" height="70" rx="6" fill="url(#accent)"/>
+      <rect x="200" y="55" width="32" height="35" rx="6" fill="rgba(124,92,255,0.3)"/>
+      <rect x="240" y="10" width="32" height="80" rx="6" fill="url(#accent)"/>
+    </g>
+    <g font-family="Inter" font-size="10" fill="#6a6a82" text-anchor="middle">
+      <text x="36" y="135">M</text>
+      <text x="76" y="135">T</text>
+      <text x="116" y="135">W</text>
+      <text x="156" y="135">T</text>
+      <text x="196" y="135">F</text>
+      <text x="236" y="135">S</text>
+      <text x="276" y="135">S</text>
+    </g>
+  </g>
+
+  <!-- quick actions widget -->
+  <g transform="translate(560,160)">
+    <rect width="280" height="170" rx="14" fill="#11111c" stroke="rgba(255,255,255,0.06)"/>
+    <text x="20" y="32" font-family="Inter" font-size="12" letter-spacing="0.6" fill="#9c9cb0" font-weight="600">QUICK ACTIONS</text>
+    <g font-family="Inter" font-size="13" fill="#e8e8f0">
+      <rect x="20" y="50" width="240" height="28" rx="8" fill="#161624" stroke="rgba(255,255,255,0.06)"/>
+      <text x="34" y="69">New note</text>
+      <rect x="20" y="84" width="240" height="28" rx="8" fill="#161624" stroke="rgba(255,255,255,0.06)"/>
+      <text x="34" y="103">New todo</text>
+      <rect x="20" y="118" width="240" height="28" rx="8" fill="#161624" stroke="rgba(255,255,255,0.06)"/>
+      <text x="34" y="137">Open file...</text>
+    </g>
+  </g>
+
+  <!-- recent widget -->
+  <g transform="translate(260,350)">
+    <rect width="280" height="170" rx="14" fill="#11111c" stroke="rgba(255,255,255,0.06)"/>
+    <text x="20" y="32" font-family="Inter" font-size="12" letter-spacing="0.6" fill="#9c9cb0" font-weight="600">RECENT FILES</text>
+    <g font-family="Inter" font-size="13" fill="#e8e8f0">
+      <text x="20" y="58">ideas.md</text>
+      <text x="20" y="80">launch-plan.md</text>
+      <text x="20" y="102">secret.md</text>
+      <text x="20" y="124">today.txt</text>
+    </g>
+  </g>
+
+  <!-- tip widget -->
+  <g transform="translate(560,350)">
+    <rect width="280" height="170" rx="14" fill="#11111c" stroke="rgba(255,255,255,0.06)"/>
+    <text x="20" y="32" font-family="Inter" font-size="12" letter-spacing="0.6" fill="#9c9cb0" font-weight="600">TIP</text>
+    <g font-family="Inter" font-size="13" fill="#e8e8f0">
+      <text x="20" y="58">Type <tspan fill="#b69bff" font-family="JetBrains Mono">**todolist**</tspan> in any</text>
+      <text x="20" y="78">blank note to turn it into a checklist.</text>
+      <text x="20" y="120" fill="#9c9cb0">Press Ctrl+Shift+L to lock.</text>
+    </g>
+  </g>
+</svg>

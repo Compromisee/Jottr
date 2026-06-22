@@ -1,0 +1,299 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Jottr - A tabbed notepad that doesn't lose your work</title>
+<meta name="description" content="Jottr is a tabbed notepad with atomic auto-save, PIN-protected files, a Windows-style home screen and a tiny built-in todo list. Open source, written in Python." />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,200..700,0..1,-50..200" rel="stylesheet" />
+<link rel="stylesheet" href="style.css" />
+<link rel="icon" type="image/svg+xml" href="assets/logo.svg" />
+</head>
+<body>
+
+<!-- ================================================================ -->
+<!--                       Parallax background layers                  -->
+<!-- ================================================================ -->
+<div class="parallax" aria-hidden="true">
+  <div class="layer layer-stars" data-depth="0.05"></div>
+  <div class="layer layer-blobs" data-depth="0.15">
+    <div class="blob blob-1"></div>
+    <div class="blob blob-2"></div>
+    <div class="blob blob-3"></div>
+  </div>
+  <div class="layer layer-grid" data-depth="0.25"></div>
+</div>
+
+<!-- ================================================================ -->
+<!--                               Header                              -->
+<!-- ================================================================ -->
+<header class="topbar">
+  <div class="container nav">
+    <a class="brand" href="#">
+      <img src="assets/logo.svg" alt="" width="28" height="28" />
+      <span>Jottr</span>
+    </a>
+    <nav>
+      <a href="#features">Features</a>
+      <a href="#screens">Screens</a>
+      <a href="#build">Build</a>
+      <a href="https://github.com/yourname/jottr" class="gh-link">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+          <path d="M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.39 7.86 10.91.58.11.79-.25.79-.56v-2.13c-3.2.7-3.87-1.36-3.87-1.36-.52-1.32-1.27-1.67-1.27-1.67-1.04-.71.08-.7.08-.7 1.15.08 1.76 1.18 1.76 1.18 1.02 1.76 2.69 1.25 3.34.96.1-.74.4-1.25.72-1.54-2.55-.29-5.24-1.28-5.24-5.71 0-1.26.45-2.29 1.18-3.1-.12-.29-.51-1.46.11-3.04 0 0 .97-.31 3.18 1.18a11.06 11.06 0 015.79 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.58.23 2.75.11 3.04.74.81 1.18 1.84 1.18 3.1 0 4.44-2.7 5.42-5.27 5.7.41.36.78 1.06.78 2.14v3.17c0 .31.21.68.8.56C20.21 21.39 23.5 17.08 23.5 12 23.5 5.65 18.35.5 12 .5z"/>
+        </svg>
+        GitHub
+      </a>
+      <a href="#download" class="cta">Download</a>
+    </nav>
+  </div>
+</header>
+
+<!-- ================================================================ -->
+<!--                                Hero                               -->
+<!-- ================================================================ -->
+<section class="hero">
+  <div class="container hero-grid">
+    <div class="hero-text">
+      <span class="kicker">
+        <span class="dot"></span>
+        v1.0 - now with PIN lock and tray mode
+      </span>
+      <h1>
+        A notepad that
+        <span class="grad">doesn't lose your work</span>.
+      </h1>
+      <p class="lead">
+        Tabs. Atomic auto-save. PIN lock. Tray. Hotkey.
+        A Windows-style home screen with widgets.
+        All in a tiny, hackable Python+webview app.
+      </p>
+      <div class="cta-row">
+        <a href="#download" class="btn primary">
+          <span class="material-symbols-outlined">download</span>
+          Download for Windows
+        </a>
+        <a href="https://github.com/yourname/jottr" class="btn ghost">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.39 7.86 10.91.58.11.79-.25.79-.56v-2.13c-3.2.7-3.87-1.36-3.87-1.36-.52-1.32-1.27-1.67-1.27-1.67-1.04-.71.08-.7.08-.7 1.15.08 1.76 1.18 1.76 1.18 1.02 1.76 2.69 1.25 3.34.96.1-.74.4-1.25.72-1.54-2.55-.29-5.24-1.28-5.24-5.71 0-1.26.45-2.29 1.18-3.1-.12-.29-.51-1.46.11-3.04 0 0 .97-.31 3.18 1.18a11.06 11.06 0 015.79 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.58.23 2.75.11 3.04.74.81 1.18 1.84 1.18 3.1 0 4.44-2.7 5.42-5.27 5.7.41.36.78 1.06.78 2.14v3.17c0 .31.21.68.8.56C20.21 21.39 23.5 17.08 23.5 12 23.5 5.65 18.35.5 12 .5z"/></svg>
+          View source
+        </a>
+      </div>
+      <div class="badges">
+        <span class="badge"><span class="material-symbols-outlined">bolt</span> Atomic auto-save</span>
+        <span class="badge"><span class="material-symbols-outlined">lock</span> PIN lock</span>
+        <span class="badge"><span class="material-symbols-outlined">desktop_windows</span> Tray + hotkey</span>
+        <span class="badge"><span class="material-symbols-outlined">code</span> MIT</span>
+      </div>
+    </div>
+
+    <div class="hero-shot" data-tilt>
+      <img src="assets/screen-editor.svg" alt="Jottr editor screenshot" />
+      <div class="hero-shot-glow"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ================================================================ -->
+<!--                            Features                               -->
+<!-- ================================================================ -->
+<section id="features" class="features">
+  <div class="container">
+    <header class="section-head">
+      <span class="kicker"><span class="dot"></span> Features</span>
+      <h2>The notepad, but the way you'd actually want it.</h2>
+      <p>Every feature is built around one rule: never lose a keystroke, never get in the way.</p>
+    </header>
+
+    <div class="feature-grid">
+      <article class="feature">
+        <span class="material-symbols-outlined ficon">bolt</span>
+        <h3>Atomic auto-save</h3>
+        <p>
+          Every save is written to a temp file, fsync'd and renamed.
+          A crash, a power loss, even a yanked USB cable can't lose your text -
+          and the save never resets your caret mid-typing.
+        </p>
+      </article>
+
+      <article class="feature">
+        <span class="material-symbols-outlined ficon">tab</span>
+        <h3>Tabs that just work</h3>
+        <p>
+          Per-tab dirty indicators, <code>Ctrl+Tab</code> cycling,
+          close-with-middle-click and a + button to spawn a fresh note.
+        </p>
+      </article>
+
+      <article class="feature">
+        <span class="material-symbols-outlined ficon">lock</span>
+        <h3>PIN when you walk away</h3>
+        <p>
+          Set an app-wide PIN or a per-file PIN. Minimize to tray and
+          Jottr re-prompts on next focus. SHA-256 + salt, stored locally.
+        </p>
+      </article>
+
+      <article class="feature">
+        <span class="material-symbols-outlined ficon">desktop_windows</span>
+        <h3>Tray + global hotkey</h3>
+        <p>
+          Hide to the system tray, summon from anywhere with
+          <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>J</kbd> (configurable).
+        </p>
+      </article>
+
+      <article class="feature">
+        <span class="material-symbols-outlined ficon">checklist</span>
+        <h3>Built-in todo list</h3>
+        <p>
+          Type <code>**todolist**</code> in a blank note and it turns
+          into a real checklist. <kbd>Enter</kbd> adds items, the box
+          turns them green with strikethrough when done.
+        </p>
+      </article>
+
+      <article class="feature">
+        <span class="material-symbols-outlined ficon">cottage</span>
+        <h3>Home screen with widgets</h3>
+        <p>
+          A Windows-style home with a 7-day streak bar chart,
+          quick actions, recent files and a rotating tip.
+        </p>
+      </article>
+
+      <article class="feature">
+        <span class="material-symbols-outlined ficon">folder_zip</span>
+        <h3>Plain Markdown on disk</h3>
+        <p>
+          Notes live as <code>.md</code> next to the binary - yours
+          forever. Sync with Dropbox, git or Syncthing. No proprietary format.
+        </p>
+      </article>
+
+      <article class="feature">
+        <span class="material-symbols-outlined ficon">terminal</span>
+        <h3>Hackable</h3>
+        <p>
+          One HTML file, one CSS file, one JS file, two Python files.
+          No build step, no framework, no transpiler.
+        </p>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- ================================================================ -->
+<!--                              Screens                              -->
+<!-- ================================================================ -->
+<section id="screens" class="screens">
+  <div class="container">
+    <header class="section-head">
+      <span class="kicker"><span class="dot"></span> Screens</span>
+      <h2>Looks at home on Windows. Runs anywhere.</h2>
+      <p>Mica-style surfaces, a dark-first palette, Material icons - no emoji.</p>
+    </header>
+
+    <div class="screen-grid">
+      <figure class="screen">
+        <img src="assets/screen-editor.svg" alt="Editor" />
+        <figcaption>
+          <strong>Editor</strong>
+          <span>Line numbers, syntax highlighting, atomic auto-save.</span>
+        </figcaption>
+      </figure>
+      <figure class="screen">
+        <img src="assets/screen-home.svg" alt="Home screen" />
+        <figcaption>
+          <strong>Home</strong>
+          <span>Streak chart, quick actions, recent files.</span>
+        </figcaption>
+      </figure>
+      <figure class="screen">
+        <img src="assets/screen-todo.svg" alt="Todo list" />
+        <figcaption>
+          <strong>Todo</strong>
+          <span>Type <code>**todolist**</code> in a blank note.</span>
+        </figcaption>
+      </figure>
+    </div>
+  </div>
+</section>
+
+<!-- ================================================================ -->
+<!--                              Download                             -->
+<!-- ================================================================ -->
+<section id="download" class="download">
+  <div class="container">
+    <div class="dl-card">
+      <div class="dl-text">
+        <h2>Grab Jottr</h2>
+        <p>Free, MIT-licensed. Works on Windows, macOS and Linux.</p>
+        <div class="dl-row">
+          <a class="btn primary big" href="https://github.com/yourname/jottr/releases/latest">
+            <span class="material-symbols-outlined">download</span>
+            Download for Windows
+          </a>
+          <a class="btn ghost big" href="https://github.com/yourname/jottr">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.39 7.86 10.91.58.11.79-.25.79-.56v-2.13c-3.2.7-3.87-1.36-3.87-1.36-.52-1.32-1.27-1.67-1.27-1.67-1.04-.71.08-.7.08-.7 1.15.08 1.76 1.18 1.76 1.18 1.02 1.76 2.69 1.25 3.34.96.1-.74.4-1.25.72-1.54-2.55-.29-5.24-1.28-5.24-5.71 0-1.26.45-2.29 1.18-3.1-.12-.29-.51-1.46.11-3.04 0 0 .97-.31 3.18 1.18a11.06 11.06 0 015.79 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.58.23 2.75.11 3.04.74.81 1.18 1.84 1.18 3.1 0 4.44-2.7 5.42-5.27 5.7.41.36.78 1.06.78 2.14v3.17c0 .31.21.68.8.56C20.21 21.39 23.5 17.08 23.5 12 23.5 5.65 18.35.5 12 .5z"/></svg>
+            Source on GitHub
+          </a>
+        </div>
+        <div class="dl-meta">
+          <span><span class="material-symbols-outlined">desktop_windows</span> Windows 10/11 installer</span>
+          <span><span class="material-symbols-outlined">laptop_mac</span> macOS via py2app</span>
+          <span><span class="material-symbols-outlined">terminal</span> Linux AppImage</span>
+        </div>
+      </div>
+      <pre class="dl-snippet"><code>git clone https://github.com/yourname/jottr
+cd jottr
+pip install pywebview pystray pillow keyboard
+python jottr.py</code></pre>
+    </div>
+  </div>
+</section>
+
+<!-- ================================================================ -->
+<!--                              Footer                               -->
+<!-- ================================================================ -->
+<footer class="footer">
+  <div class="container">
+    <div class="foot-cols">
+      <div>
+        <a class="brand" href="#">
+          <img src="assets/logo.svg" alt="" width="24" height="24" />
+          <span>Jottr</span>
+        </a>
+        <p class="muted">A notepad that doesn't lose your work.</p>
+      </div>
+      <div>
+        <h5>Project</h5>
+        <a href="https://github.com/yourname/jottr">Source</a>
+        <a href="https://github.com/yourname/jottr/releases">Releases</a>
+        <a href="https://github.com/yourname/jottr/issues">Issues</a>
+        <a href="../packaging.md">Build guide</a>
+      </div>
+      <div>
+        <h5>Resources</h5>
+        <a href="#features">Features</a>
+        <a href="#screens">Screens</a>
+        <a href="https://github.com/yourname/jottr/blob/main/LICENSE">License</a>
+        <a href="https://github.com/yourname/jottr/discussions">Discussions</a>
+      </div>
+    </div>
+    <div class="foot-bot">
+      <span class="muted">MIT - made with care.</span>
+      <span class="star-btn">
+        <a href="https://github.com/yourname/jottr">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.39 7.86 10.91.58.11.79-.25.79-.56v-2.13c-3.2.7-3.87-1.36-3.87-1.36-.52-1.32-1.27-1.67-1.27-1.67-1.04-.71.08-.7.08-.7 1.15.08 1.76 1.18 1.76 1.18 1.02 1.76 2.69 1.25 3.34.96.1-.74.4-1.25.72-1.54-2.55-.29-5.24-1.28-5.24-5.71 0-1.26.45-2.29 1.18-3.1-.12-.29-.51-1.46.11-3.04 0 0 .97-.31 3.18 1.18a11.06 11.06 0 015.79 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.58.23 2.75.11 3.04.74.81 1.18 1.84 1.18 3.1 0 4.44-2.7 5.42-5.27 5.7.41.36.78 1.06.78 2.14v3.17c0 .31.21.68.8.56C20.21 21.39 23.5 17.08 23.5 12 23.5 5.65 18.35.5 12 .5z"/></svg>
+          Star on GitHub
+        </a>
+      </span>
+    </div>
+  </div>
+</footer>
+
+<script src="script.js"></script>
+</body>
+</html>
