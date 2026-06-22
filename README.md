@@ -27,6 +27,11 @@ a power loss or a yanked USB cable can never eat your text.
 It looks at home on Windows 11, but it's a tiny Python+webview app,
 so it runs anywhere Python and a browser engine do.
 
+**Jottr 2.1** adds folders, drag-and-drop, color tags, PIN-per-file
+(config-stored, not file headers), a plugin system (`.plugg` files),
+collapsable widgets and sidebar, smooth animations, and a one-file
+PyInstaller spec for a single standalone `Jottr.exe`.
+
 ---
 
 ## Features
@@ -125,6 +130,45 @@ todos are still diff-able, greppable and version-controllable.
 
 ---
 
+### Plugins
+
+Jottr ships a tiny plugin system: drop a `*.plugg` file into the Jottr
+install dir and it shows up in **Settings -> Plugins**. Each plugin
+is just a Python module with a `register()` function (and optionally
+`activate(api)` / `deactivate()`).
+
+The bundled first-party plugin, **Note Encryptor** (`encrypt_decrypt.plugg`),
+adds right-click menu items to encrypt/decrypt individual notes with a
+password. It's zero-dependency (XOR + base64) and lives in `plugins/`.
+
+See **`syntax.plugg`** in the repo root for the full grammar of the
+manifest format.
+
+### Folders
+
+Notes can be organized into folders. Right-click a folder to create
+new notes inside, rename or delete. Notes can be **dragged from the
+sidebar onto a folder** to move them. Per-folder PINs apply to every
+note inside.
+
+### Color tags
+
+Every note and folder can have a **color tag** (set via the right-click
+menu). The sidebar icon and the recently-used widget pick up the
+color. Default: **purple for folders, grey for files**.
+
+### Collapsible widgets & sidebar
+
+Click any widget header on the home screen to collapse / expand it.
+Same for sidebar sections - the collapsed state persists across
+sessions in `config.json`.
+
+### Animations
+
+Every transition in the UI is animated: tab switches, panel
+collapses, toast popups, settings opening/closing, drag-over
+highlights, and the home screen widgets slide in on load.
+
 ## Quick start
 
 ### Run from source
@@ -184,6 +228,7 @@ For an installer, see [`packaging.md`](./packaging.md) section 4.
 | `Ctrl+Shift+V` | Toggle preview mode |
 | `Ctrl+Shift+P` | Cycle theme |
 | `Ctrl+Shift+H` | Focus home search |
+| `Ctrl+Shift+V` | Toggle preview |
 | `Ctrl+Shift+L` | Lock now |
 | `Ctrl+Alt+J` | Toggle window (configurable) |
 

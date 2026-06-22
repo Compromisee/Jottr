@@ -58,31 +58,47 @@ generator in `backend.py`.
 
 ## 3. Portable single-file build (PyInstaller)
 
+Jottr ships a checked-in PyInstaller spec file at `build/jottr.spec`
+that wraps everything into a single self-contained `Jottr.exe`
+(~30 MB) using the multi-size `assets/icon.ico` so Windows can show
+a proper taskbar / Alt-Tab icon at every DPI.
+
 ```powershell
-pyinstaller --noconfirm ^
-  --name Jottr ^
-  --windowed ^
-  --onefile ^
-  --icon assets\icon.png ^
-  --add-data "ui;ui" ^
-  --add-data "assets;assets" ^
-  --collect-all pystray ^
-  --collect-all pywebview ^
-  --hidden-import keyboard ^
-  jottr.py
+pip install pywebview pystray pillow keyboard pyinstaller
+pyinstaller --clean build\jottr.spec
 ```
 
-Output: `dist\Jottr.exe` (~30 MB). Drop it anywhere; no install needed.
+Output: `dist\Jottr.exe`. Drop it anywhere; no install needed.
 
-### Why these flags?
+### What the .spec bundles
 
-| Flag | Purpose |
-|---|---|
-| `--windowed` | No console window on Windows. |
-| `--onefile` | Single `.exe`; PyInstaller extracts to `%TEMP%` at launch. |
-| `--add-data "ui;ui"` | Bundle the static UI directory. |
-| `--collect-all pywebview` | Pulls the edgechromium backend shim. |
-| `--hidden-import keyboard` | `keyboard` ships native hooks that PyInstaller can't auto-detect. |
+| Resource | Source | Why |
+|---|---|---|
+| `jottr.py` + `backend.py` | repo root | Python app + JS bridge |
+| `ui/` | repo | static HTML / CSS / JS frontend |
+| `assets/icon.ico` | repo | multi-size taskbar / window icon |
+| `encrypt_decrypt.plugg` | repo root | bundled first-party plugin |
+| `syntax.plugg` | repo root | plugin manifest format reference |
+| `plugins/` | repo | Python module backing the encryptor |
+
+### Why a .spec file?
+
+* **`build/jottr.spec`** is the canonical recipe for producing a
+  working standalone binary. New contributors don't have to guess
+  the right `pyinstaller` flags - just `pyinstaller build/jottr.spec`.
+* The spec explicitly lists `hiddenimports` (`pystray`, `keyboard`,
+  `plugins.encrypt_decrypt`, ...) so PyInstaller's static analyser
+  doesn't accidentally drop them.
+* It also lists the `*.plugg` files in `datas=` so Jottr can find
+  them at runtime even when frozen into a single .exe.
+
+### Manual flag reference
+
+If you'd rather build by hand, the equivalent CLI invocation is:
+
+```bash
+pyinstaller --noconfirm --windowed --onefile   --icon assets/icon.ico   --add-data "ui:ui"   --add-data "assets:assets"   --add-data "encrypt_decrypt.plugg:."   --add-data "syntax.plugg:."   --collect-all pystray   --collect-all pywebview   --hidden-import keyboard   --hidden-import plugins.encrypt_decrypt   jottr.py
+```
 
 If the bundle complains about `clr_loader` / `winreg`, add
 `--hidden-import clr_loader` and `--hidden-import winreg`.

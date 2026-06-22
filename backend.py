@@ -333,18 +333,36 @@ class JottrAPI:
                 cur_section = line.strip("=").strip().lower()
                 continue
             if cur_section == "meta":
-                m = re.match(r"^(\S+)(?:\s+(.*))?$", line)
-                if m:
-                    # Flush previous key.
+                # In the meta section, only a whitelist of well-known
+                # keys starts a new key. Anything else is a continuation
+                # line for the previous key (e.g. multi-line
+                # description). The first non-blank line after a key
+                # declaration becomes the value, subsequent lines
+                # are appended until another key is seen.
+                META_KEYS = {
+                    "id", "name", "version", "author", "description",
+                    "icon", "homepage", "license", "min_app_version",
+                    "tags",
+                }
+                stripped = line.strip()
+                is_key_line = False
+                key_name = None
+                key_value = ""
+                m = re.match(r"^([a-z][a-z0-9_-]{1,30})(\s+(.*))?$", stripped)
+                if m and m.group(1).lower() in META_KEYS:
+                    is_key_line = True
+                    key_name = m.group(1).lower()
+                    key_value = (m.group(3) or "").strip()
+                if is_key_line:
                     if cur_key is not None:
                         if cur_key in meta:
                             meta[cur_key] = str(meta[cur_key]) + "\n" + "\n".join(cur_value).strip()
                         else:
                             meta[cur_key] = "\n".join(cur_value).strip()
-                    cur_key = m.group(1).lower()
-                    cur_value = [(m.group(2) or "").strip()]
+                    cur_key = key_name
+                    cur_value = [key_value]
                 elif cur_key is not None:
-                    cur_value.append(line.strip())
+                    cur_value.append(stripped)
             elif cur_section == "runtime":
                 m = re.match(r"^(\S+)\s+(.*)$", line)
                 if m:

@@ -16,6 +16,7 @@ import webview
 from backend import JottrAPI
 
 
+__version__ = "2.1.0"
 APP_NAME = "Jottr"
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 UI_DIR = os.path.join(APP_DIR, "ui")

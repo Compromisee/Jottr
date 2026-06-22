@@ -408,6 +408,8 @@
     } else {
       updateHideEmptyEditor();
     }
+    initCollapsibles();
+    refreshPluginsList();
     window.__jottr = {
       newNote: () => newNote(),
       focusQuickNew: () => newNote(),
@@ -462,6 +464,7 @@
       ul.appendChild(renderTreeNode(node, 0));
     });
     root.appendChild(ul);
+    attachDragHandlers();
   }
 
   function renderTreeNode(node, depth) {
@@ -469,6 +472,7 @@
     if (node.kind === "folder") {
       const row = document.createElement("div");
       row.className = "folder-row";
+      row.dataset.folder = node.name || "";
       const collapsed = !!state_folders.collapsed[node.name];
       if (collapsed) row.classList.add("collapsed");
       if (state_folders.current === node.name) row.classList.add("selected");
@@ -478,9 +482,10 @@
       const ico = document.createElement("span");
       ico.className = "material-symbols-outlined folder-ico";
       ico.textContent = collapsed ? "folder" : "folder_open";
+      ico.style.color = tagColorFor(node.name, "folder");
       const lbl = document.createElement("span");
       lbl.className = "label";
-      lbl.textContent = basename(node.name);
+      lbl.textContent = basename(node.name) || "(root)";
       row.append(chev, ico, lbl);
       row.addEventListener("click", (e) => {
         if (e.altKey) {
@@ -517,12 +522,15 @@
       const row = document.createElement("div");
       row.className = "tree-file";
       row.dataset.openFile = node.name;
+      row.draggable = true;
       if (state.activeTab === node.name) row.classList.add("is-active");
       const chev = document.createElement("span");
-      chev.className = "chev";
+      chev.className = "chev material-symbols-outlined";
+      chev.textContent = "drag_indicator";
       const ico = document.createElement("span");
       ico.className = "material-symbols-outlined file-ico";
       ico.textContent = "description";
+      ico.style.color = tagColorFor(node.name, "note");
       const lbl = document.createElement("span");
       lbl.className = "label";
       lbl.textContent = basename(node.name);
@@ -582,11 +590,36 @@
     } catch (e) { toast("Open failed: " + e.message, "error"); }
   }
 
+  // Track which PINs we've already verified in this session
+  // so we don't re-prompt every time the user re-opens a tab.
+  const unlocked = new Set();
+
   async function openTab(name) {
     if (!hasApi()) return;
     if (state.tabs.find((t) => t.name === name)) {
       activateTab(name);
       return;
+    }
+    // PIN gate: if this file (or any parent folder) has a PIN, ask
+    // for it before reading the file. PINs are stored in config.json
+    // (NOT as a header inside the file itself).
+    if (!unlocked.has(name) && !unlocked.has("__app__")) {
+      try {
+        const c = await pycall("check_pin", name, "");
+        if (c && c.required) {
+          const ok = await promptForPin(c.scope === "folder"
+              ? "This folder is locked. Enter its PIN:"
+              : "This file is locked. Enter its PIN:");
+          if (!ok) { toast("Cancelled - file not opened", "info"); return; }
+          const v = await pycall("check_pin", name, ok);
+          if (!v.ok) {
+            toast("Wrong PIN", "error");
+            return;
+          }
+          unlocked.add(name);
+          toast("Unlocked " + (c.scope === "folder" ? "folder" : "file"), "lock_open");
+        }
+      } catch (e) { /* ignore */ }
     }
     try {
       const r = await pycall("read_note", name);
@@ -605,9 +638,45 @@
       activateTab(name);
       refreshRecent();
       refreshPinned();
+      refreshFolderTree();
     } catch (e) {
       toast("Read failed: " + e.message, "error");
     }
+  }
+
+  // Promise-based PIN prompt. Resolves to the entered PIN (string)
+  // or null if the user cancelled.
+  function promptForPin(message) {
+    return new Promise((resolve) => {
+      const ov = $("#pin-overlay");
+      const input = $("#pin-input");
+      const err = $("#pin-error");
+      const unlock = $("#pin-unlock");
+      $("#pin-overlay .pin-card h2").textContent = "Locked";
+      $("#pin-overlay .pin-card p").textContent = message;
+      ov.classList.remove("hidden");
+      input.value = "";
+      err.textContent = "";
+      setTimeout(() => input.focus(), 30);
+      const cleanup = () => {
+        $("#pin-overlay .pin-card h2").textContent = "Jottr is locked";
+        $("#pin-overlay .pin-card p").textContent = "Enter your PIN to continue";
+        unlock.removeEventListener("click", onOk);
+        input.removeEventListener("keydown", onKey);
+      };
+      const onOk = () => {
+        const v = input.value;
+        cleanup();
+        ov.classList.add("hidden");
+        resolve(v);
+      };
+      const onKey = (e) => {
+        if (e.key === "Enter") { e.preventDefault(); onOk(); }
+        else if (e.key === "Escape") { e.preventDefault(); cleanup(); ov.classList.add("hidden"); resolve(null); }
+      };
+      unlock.addEventListener("click", onOk);
+      input.addEventListener("keydown", onKey);
+    });
   }
 
   function closeTab(name) {
@@ -1510,7 +1579,8 @@
       li.dataset.openFile = name;
       const main = document.createElement("span");
       main.className = "material-symbols-outlined";
-      main.textContent = pinIcon ? "description" : "description";
+      main.textContent = "description";
+      main.style.color = tagColorFor(name, "note");
       const lbl = document.createElement("span");
       lbl.textContent = name;
       li.append(main, lbl);
@@ -1630,6 +1700,7 @@
     $("#set-context").checked = !!state.config.explorer_context_menu;
     $("#set-preview-default").checked = !!state.config.preview_default;
     $("#set-pin").value = "";
+    refreshPluginsList();
   }
   function closeSettings() { $("#settings-modal").classList.add("hidden"); }
 
@@ -1971,23 +2042,11 @@
     try {
       if (act === "open") openTab(name);
       else if (act === "pin") togglePin(name);
+      else if (act === "tag") openTagPicker(name, "note");
       else if (act === "move") openMoveModal(name);
       else if (act === "reveal") await pycall("reveal_in_explorer", name);
       else if (act === "setpin") {
-        const pin = prompt("Set a per-file PIN for " + name + " (leave empty to clear):");
-        if (pin === null) return;
-        const tab = state.tabs.find((t) => t.name === name);
-        if (tab) {
-          if (pin) {
-            tab.textarea.value = "<!-- pin:" + btoa(pin) + " -->\n" +
-              tab.textarea.value.replace(/^<!-- pin:[^>]*-->\n?/, "");
-          } else {
-            tab.textarea.value = tab.textarea.value.replace(/^<!-- pin:[^>]*-->\n?/, "");
-          }
-          onEditorInput(tab);
-          flushSave(tab);
-        }
-        toast(pin ? "PIN set on " + name : "PIN cleared", "lock");
+        await setPinInteractive(name, "note");
       }
       else if (act === "rename") {
         const nn = prompt("Rename to:", name);
@@ -2005,6 +2064,13 @@
         await pycall("delete_note", name);
         closeTab(name);
         refreshRecent();
+        refreshFolderTree();
+      }
+      else if (act === "encrypt") {
+        await encryptFileInteractive(name);
+      }
+      else if (act === "decrypt") {
+        await decryptFileInteractive(name);
       }
     } catch (e) { toast("Action failed: " + e.message, "error"); }
   }
@@ -2117,5 +2183,356 @@
     el.classList.remove("hidden");
     clearTimeout(el._t);
     el._t = setTimeout(() => el.classList.add("hidden"), 2200);
+  }
+
+  // ============================================================
+  //                    COLOR TAGS
+  // ============================================================
+  const TAG_COLORS = [
+    { name: "None",   hex: "" },
+    { name: "Purple", hex: "#7c5cff" },
+    { name: "Cyan",   hex: "#5cc8ff" },
+    { name: "Mint",   hex: "#58e1a8" },
+    { name: "Pink",   hex: "#ff8ad1" },
+    { name: "Amber",  hex: "#ffb86b" },
+    { name: "Coral",  hex: "#ff6363" },
+    { name: "Rust",   hex: "#cb4b16" },
+    { name: "Sand",   hex: "#e8a16c" },
+    { name: "Slate",  hex: "#6f7e8c" },
+    { name: "Sky",    hex: "#7ab8ff" },
+    { name: "Lime",   hex: "#9bd14a" },
+    { name: "Plum",   hex: "#a06bbf" },
+    { name: "Graphite", hex: "#9aa0a6" },
+    { name: "Rose",   hex: "#f48fb1" },
+    { name: "Sage",   hex: "#90c695" },
+  ];
+  // Default colors: purple for folders, grey for files.
+  const DEFAULT_FOLDER_COLOR = "#7c5cff";
+  const DEFAULT_FILE_COLOR = "#9aa0a6";
+
+  function tagColorFor(name, kind) {
+    const tags = (state.config && state.config.tags) || { notes: {}, folders: {} };
+    const bucket = kind === "folder" ? tags.folders : tags.notes;
+    const raw = bucket && bucket[name];
+    if (raw) return raw;
+    return kind === "folder" ? DEFAULT_FOLDER_COLOR : DEFAULT_FILE_COLOR;
+  }
+
+  function tagDot(color) {
+    const span = document.createElement("span");
+    span.className = "tag-dot";
+    if (color) span.style.background = color;
+    return span;
+  }
+
+  async function openTagPicker(name, kind) {
+    if (!hasApi()) return;
+    // Build modal ad-hoc
+    let modal = $("#tag-modal");
+    if (!modal) {
+      modal = document.createElement("div");
+      modal.id = "tag-modal";
+      modal.className = "overlay hidden";
+      modal.innerHTML = `
+        <div class="modal-card tag-card">
+          <header class="modal-head">
+            <h2>Tag color</h2>
+            <button class="iconbtn" id="tag-close"><span class="material-symbols-outlined">close</span></button>
+          </header>
+          <div class="modal-body">
+            <p class="hint" id="tag-target"></p>
+            <div class="tag-picker-grid" id="tag-grid"></div>
+          </div>
+        </div>`;
+      document.body.appendChild(modal);
+      modal.addEventListener("click", (e) => {
+        if (e.target.id === "tag-modal") closeTagPicker();
+      });
+      $("#tag-close").addEventListener("click", closeTagPicker);
+    }
+    const grid = $("#tag-grid");
+    grid.innerHTML = "";
+    const current = tagColorFor(name, kind);
+    TAG_COLORS.forEach((c) => {
+      const sw = document.createElement("div");
+      sw.className = "tag-swatch" + (c.hex === "" ? " none" : "");
+      sw.style.background = c.hex || "transparent";
+      sw.title = c.name;
+      if ((c.hex || "") === (current || "")) sw.classList.add("selected");
+      sw.addEventListener("click", () => pickTag(name, kind, c.hex));
+      grid.appendChild(sw);
+    });
+    $("#tag-target").textContent = `Pick a color for ${kind === "folder" ? "folder" : "note"}: ${name}`;
+    modal._name = name;
+    modal._kind = kind;
+    modal.classList.remove("hidden");
+  }
+  function closeTagPicker() {
+    $("#tag-modal")?.classList.add("hidden");
+  }
+  async function pickTag(name, kind, color) {
+    try {
+      const r = await pycall("set_tag", name, color || "", kind);
+      if (r && r.ok) {
+        toast(color ? "Tag set on " + basename(name) : "Tag cleared", "palette");
+        refreshFolderTree();
+        refreshRecent();
+        openTagPicker(name, kind);  // refresh selection
+      } else {
+        toast("Could not set tag: " + (r && r.error), "error");
+      }
+    } catch (e) { toast("Tag failed: " + e.message, "error"); }
+  }
+
+  // ============================================================
+  //                    PER-FILE / PER-FOLDER PIN
+  // ============================================================
+  async function setPinInteractive(name, kind) {
+    if (!hasApi()) return;
+    const newPin = prompt("Set PIN for " + name + " (leave empty to clear):", "");
+    if (newPin === null) return;
+    try {
+      const r = await pycall("set_pin", name, newPin, kind);
+      if (r && r.ok) {
+        unlocked.delete(name);  // require re-entry
+        toast(newPin ? "PIN set on " + basename(name) : "PIN cleared on " + basename(name),
+             newPin ? "lock" : "lock_open");
+        refreshFolderTree();
+      } else {
+        toast("Could not set PIN: " + (r && r.error), "error");
+      }
+    } catch (e) { toast("PIN failed: " + e.message, "error"); }
+  }
+
+  // ============================================================
+  //                    DRAG-AND-DROP INTO FOLDERS
+  // ============================================================
+  function attachDragHandlers() {
+    // Run after the folder tree is in the DOM.
+    const tree = $("#folder-tree");
+    if (!tree) return;
+    tree.addEventListener("dragstart", (e) => {
+      const file = e.target.closest(".tree-file");
+      if (!file) return;
+      e.dataTransfer.setData("text/jottr-file", file.dataset.openFile);
+      e.dataTransfer.effectAllowed = "move";
+      file.classList.add("dragging");
+    });
+    tree.addEventListener("dragend", (e) => {
+      const file = e.target.closest(".tree-file");
+      if (file) file.classList.remove("dragging");
+      $$(".folder-row.dragover").forEach((f) => f.classList.remove("dragover"));
+    });
+    tree.addEventListener("dragover", (e) => {
+      const folder = e.target.closest(".folder-row");
+      if (!folder) return;
+      const dt = e.dataTransfer;
+      if (!dt || !dt.types.includes("text/jottr-file")) return;
+      e.preventDefault();
+      dt.dropEffect = "move";
+      folder.classList.add("dragover");
+    });
+    tree.addEventListener("dragleave", (e) => {
+      const folder = e.target.closest(".folder-row");
+      if (folder && (!e.relatedTarget || !folder.contains(e.relatedTarget))) {
+        folder.classList.remove("dragover");
+      }
+    });
+    tree.addEventListener("drop", async (e) => {
+      const folder = e.target.closest(".folder-row");
+      if (!folder) return;
+      const srcName = e.dataTransfer.getData("text/jottr-file");
+      if (!srcName) return;
+      e.preventDefault();
+      folder.classList.remove("dragover");
+      const folderName = folder.dataset.folder || "";
+      // Don't move into itself
+      if (srcName === folderName || srcName.startsWith(folderName + "/")) return;
+      try {
+        const r = await pycall("move_note", srcName, folderName);
+        if (r && r.ok) {
+          toast("Moved " + basename(srcName) + " to " + (folderName || "root"), "drive_file_move");
+          // If the moved note is open, rename its tab too
+          const tab = state.tabs.find((t) => t.name === srcName);
+          if (tab) tab.name = r.name;
+          unlocked.delete(srcName);
+          refreshFolderTree();
+          refreshRecent();
+          renderTabBar();
+        } else {
+          toast("Move failed: " + (r && r.error), "error");
+        }
+      } catch (e) { toast("Move failed: " + e.message, "error"); }
+    });
+  }
+
+  // ============================================================
+  //                    WIDGET & SIDEBAR COLLAPSE
+  // ============================================================
+  const sidebarCollapsed = {
+    quick: false,
+    pinned: false,
+    notes: false,
+    recent: false,
+    stats: false,
+  };
+
+  function applySidebarCollapse() {
+    Object.keys(sidebarCollapsed).forEach((id) => {
+      const sec = document.querySelector('.side-section[data-section="' + id + '"]');
+      if (!sec) return;
+      sec.classList.toggle("collapsed", !!sidebarCollapsed[id]);
+    });
+  }
+  function initCollapsibles() {
+    // Sidebar section headers
+    $$('.side-section[data-section] h3').forEach((h) => {
+      h.addEventListener("click", () => {
+        const id = h.parentElement.dataset.section;
+        sidebarCollapsed[id] = !sidebarCollapsed[id];
+        if (state.config) {
+          state.config.sidebar_collapsed = state.config.sidebar_collapsed || {};
+          state.config.sidebar_collapsed[id] = !!sidebarCollapsed[id];
+          if (hasApi()) {
+            pycall("update_settings", { sidebar_collapsed: state.config.sidebar_collapsed })
+              .catch(() => {});
+          }
+        }
+        applySidebarCollapse();
+      });
+    });
+    // Widget headers
+    $$(".widget-head").forEach((h) => {
+      h.addEventListener("click", () => {
+        const w = h.closest(".widget");
+        if (w) w.classList.toggle("collapsed");
+      });
+    });
+    // Restore from config
+    if (state.config && state.config.sidebar_collapsed) {
+      Object.assign(sidebarCollapsed, state.config.sidebar_collapsed);
+    }
+    applySidebarCollapse();
+  }
+
+  // ============================================================
+  //                    PLUGIN MANAGER UI
+  // ============================================================
+  async function refreshPluginsList() {
+    if (!hasApi()) return;
+    const wrap = $("#plugins-list");
+    if (!wrap) return;
+    wrap.innerHTML = "";
+    try {
+      const r = await pycall("list_plugins");
+      const plugins = (r && r.plugins) || [];
+      if (!plugins.length) {
+        wrap.innerHTML = '<p class="hint">No .plugg files found. See <code>syntax.plugg</code> in the Jottr directory for the manifest format.</p>';
+        return;
+      }
+      plugins.forEach((p) => {
+        const card = document.createElement("div");
+        card.className = "plugin-card";
+        const head = document.createElement("div");
+        head.className = "plugin-head";
+        const ico = document.createElement("span");
+        ico.className = "material-symbols-outlined";
+        ico.textContent = p.icon || "extension";
+        ico.style.color = "var(--accent)";
+        const nm = document.createElement("span");
+        nm.className = "plugin-name";
+        nm.textContent = p.name;
+        const ver = document.createElement("span");
+        ver.className = "plugin-version";
+        ver.textContent = p.version || "";
+        head.append(ico, nm, ver);
+        card.appendChild(head);
+        if (p.description) {
+          const d = document.createElement("div");
+          d.className = "plugin-desc";
+          d.textContent = p.description;
+          card.appendChild(d);
+        }
+        if (p.features && p.features.length) {
+          const ul = document.createElement("ul");
+          ul.style.margin = "6px 0 0 0";
+          ul.style.paddingLeft = "18px";
+          p.features.forEach((f) => {
+            const li = document.createElement("li");
+            li.textContent = f;
+            li.style.fontSize = "12.5px";
+            li.style.color = "var(--fg-mute)";
+            ul.appendChild(li);
+          });
+          card.appendChild(ul);
+        }
+        const actions = document.createElement("div");
+        actions.className = "plugin-actions";
+        const btn = document.createElement("button");
+        btn.className = "btn " + (p.enabled ? "" : "primary");
+        btn.textContent = p.enabled ? "Disable" : "Enable";
+        btn.addEventListener("click", () => togglePlugin(p.id, !p.enabled));
+        actions.appendChild(btn);
+        card.appendChild(actions);
+        wrap.appendChild(card);
+      });
+    } catch (e) {
+      wrap.innerHTML = '<p class="hint">Plugin load failed: ' + escapeHtml(e.message) + "</p>";
+    }
+  }
+  async function togglePlugin(id, enabled) {
+    try {
+      const r = await pycall("set_plugin_enabled", id, enabled);
+      if (r && r.ok) {
+        toast((enabled ? "Enabled " : "Disabled ") + id, "extension");
+        refreshPluginsList();
+      }
+    } catch (e) { toast("Plugin toggle failed: " + e.message, "error"); }
+  }
+
+  // ============================================================
+  //                    ENCRYPT / DECRYPT (uses bundled plugin)
+  // ============================================================
+  async function encryptFileInteractive(name) {
+    if (!hasApi()) return;
+    const pw = prompt("Encrypt " + basename(name) + "\nEnter a password (you'll need it to decrypt):");
+    if (!pw) return;
+    try {
+      const r = await pycall("encrypt_file", name, pw);
+      if (r && r.ok) {
+        toast("Encrypted " + basename(name), "lock");
+        refreshFolderTree();
+        refreshRecent();
+      } else {
+        toast("Encrypt failed: " + (r && r.error), "error");
+      }
+    } catch (e) { toast("Encrypt failed: " + e.message, "error"); }
+  }
+  async function decryptFileInteractive(name) {
+    if (!hasApi()) return;
+    const pw = prompt("Decrypt " + basename(name) + "\nEnter the password:");
+    if (!pw) return;
+    try {
+      const r = await pycall("decrypt_file", name, pw);
+      if (r && r.ok) {
+        toast("Decrypted " + basename(name), "lock_open");
+        // If the note is open in a tab, reload its content.
+        const tab = state.tabs.find((t) => t.name === name);
+        if (tab) {
+          const r2 = await pycall("read_note", name);
+          if (r2 && r2.ok) {
+            tab.content = r2.content || "";
+            tab.textarea.value = tab.content;
+            syncHighlight(tab);
+            renderGutter(tab);
+            updateStatus(tab);
+          }
+        }
+        refreshFolderTree();
+        refreshRecent();
+      } else {
+        toast("Decrypt failed: " + (r && r.error), "error");
+      }
+    } catch (e) { toast("Decrypt failed: " + e.message, "error"); }
   }
 })();

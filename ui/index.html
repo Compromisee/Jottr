@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Jottr</title>
+<title>Jottr 2.1</title>
 <link rel="stylesheet"
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" />
 <link rel="stylesheet"
@@ -66,8 +66,12 @@
 
     <!-- Sidebar -->
     <aside class="sidebar">
-      <section class="side-section">
-        <h3>Quick</h3>
+      <section class="side-section" data-section="quick">
+        <h3>
+          <span>Quick</span>
+          <span class="material-symbols-outlined side-chev">expand_more</span>
+        </h3>
+        <div class="side-body">
         <button class="side-action" id="quick-new-note">
           <span class="material-symbols-outlined">note_add</span>
           <span>New Note</span>
@@ -83,32 +87,43 @@
           <span>Open&hellip;</span>
           <kbd>Ctrl O</kbd>
         </button>
+        </div>
       </section>
 
-      <section class="side-section">
+      <section class="side-section" data-section="notes">
         <h3>
           <span>Notes</span>
           <button id="folder-add" class="iconbtn" title="New folder">
             <span class="material-symbols-outlined">create_new_folder</span>
           </button>
+          <span class="material-symbols-outlined side-chev">expand_more</span>
         </h3>
-        <div id="folder-tree" class="folder-tree">
-          <div class="side-empty">Loading...</div>
+        <div class="side-body">
+          <div id="folder-tree" class="folder-tree">
+            <div class="side-empty">Loading...</div>
+          </div>
         </div>
       </section>
 
-      <section class="side-section">
+      <section class="side-section" data-section="pinned">
         <h3>
           <span>Pinned</span>
           <span class="material-symbols-outlined side-h-icon">push_pin</span>
+          <span class="material-symbols-outlined side-chev">expand_more</span>
         </h3>
-        <ul class="recent-list" id="pinned-list">
-          <li class="side-empty">No pinned notes yet</li>
-        </ul>
+        <div class="side-body">
+          <ul class="recent-list" id="pinned-list">
+            <li class="side-empty">No pinned notes yet</li>
+          </ul>
+        </div>
       </section>
 
-      <section class="side-section">
-        <h3>Recent</h3>
+      <section class="side-section" data-section="recent">
+        <h3>
+          <span>Recent</span>
+          <span class="material-symbols-outlined side-chev">expand_more</span>
+        </h3>
+        <div class="side-body">
         <ul class="recent-list" id="recent-list">
           <li data-open-file="ideas.md">
             <span class="material-symbols-outlined">description</span>
@@ -127,10 +142,15 @@
             <span>today.txt</span>
           </li>
         </ul>
+        </div>
       </section>
 
-      <section class="side-section">
-        <h3>Stats</h3>
+      <section class="side-section" data-section="stats">
+        <h3>
+          <span>Stats</span>
+          <span class="material-symbols-outlined side-chev">expand_more</span>
+        </h3>
+        <div class="side-body">
         <div class="stat-row">
           <span class="material-symbols-outlined stat-ico">local_fire_department</span>
           <div>
@@ -151,6 +171,7 @@
             <div class="stat-value" id="stat-words">0</div>
             <div class="stat-label">words all-time</div>
           </div>
+        </div>
         </div>
       </section>
     </aside>
@@ -418,6 +439,16 @@
           are applied immediately to your user registry.
         </p>
       </section>
+
+      <section>
+        <h4>Plugins</h4>
+        <p class="hint">
+          Jottr scans for <code>*.plugg</code> files in its directory at startup.
+          See <code>syntax.plugg</code> in the Jottr install for the manifest format.
+          Plugins are pure Python modules exposing a <code>register()</code> function.
+        </p>
+        <div id="plugins-list"><p class="hint">Loading plugins...</p></div>
+      </section>
     </div>
 
     <footer class="modal-foot">
@@ -485,11 +516,20 @@
   <button data-act="move" role="menuitem" id="ctx-move">
     <span class="material-symbols-outlined">drive_file_move</span> Move to folder&hellip;
   </button>
+  <button data-act="tag" role="menuitem">
+    <span class="material-symbols-outlined">palette</span> Set tag color
+  </button>
   <button data-act="reveal" role="menuitem">
     <span class="material-symbols-outlined">folder</span> Reveal in Explorer
   </button>
   <button data-act="setpin" role="menuitem">
-    <span class="material-symbols-outlined">lock</span> Set per-file PIN
+    <span class="material-symbols-outlined">lock</span> Set PIN
+  </button>
+  <button data-act="encrypt" role="menuitem" id="ctx-encrypt">
+    <span class="material-symbols-outlined">encrypted</span> Encrypt with password&hellip;
+  </button>
+  <button data-act="decrypt" role="menuitem" id="ctx-decrypt">
+    <span class="material-symbols-outlined">lock_open</span> Decrypt with password&hellip;
   </button>
   <div class="ctx-sep"></div>
   <button data-act="rename" role="menuitem">
