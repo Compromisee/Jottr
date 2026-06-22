@@ -2,9 +2,9 @@
 
 <img src="website/assets/logo.svg" alt="Jottr" width="96" />
 
-# Jottr V2.1
+# Jottr v2.1
 
-**A tabbed notepad with atomic auto-save, PIN-protected files and a Windows-style home screen.**
+**A simple tabbed notepad**
 
 [![GitHub release](https://img.shields.io/github/v/release/Compromisee/Jottr?style=flat-square)](../../releases)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-7c5cff?style=flat-square)]()
