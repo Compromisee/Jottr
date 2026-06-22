@@ -38,7 +38,13 @@
   --font-mono: "JetBrains Mono", "Cascadia Mono", "Consolas", monospace;
 }
 
-/* ---------- Themes ---------------------------------------------------- */
+/* ---------- Themes -------------------------------------------------
+   Every theme defines the FULL palette (--bg, --bg-elev, --bg-elev-2,
+   --bg-elev-3, --bg-sidebar, --bg-titlebar, --line, --line-strong,
+   --fg, --fg-mute, --fg-faint, --accent, --accent-2, --accent-soft,
+   --shadow-1, --shadow-2) so that switching theme updates every
+   surface. The data-theme attribute lives on the <html> element
+   so variables cascade through inheritance. */
 [data-theme="midnight"] {
   --accent: #7c5cff;
   --accent-2: #b69bff;
@@ -47,7 +53,15 @@
   --bg-elev: #11111c;
   --bg-elev-2: #161624;
   --bg-elev-3: #1d1d2e;
+  --bg-sidebar: rgba(15, 15, 24, 0.72);
+  --bg-titlebar: rgba(11, 11, 20, 0.85);
+  --line: rgba(255, 255, 255, 0.06);
+  --line-strong: rgba(255, 255, 255, 0.12);
   --fg: #e8e8f0;
+  --fg-mute: #9c9cb0;
+  --fg-faint: #6a6a82;
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-2: 0 8px 30px rgba(0, 0, 0, 0.45);
 }
 [data-theme="graphite"] {
   --accent: #5cc8ff;
@@ -57,7 +71,15 @@
   --bg-elev: #161b22;
   --bg-elev-2: #1c2129;
   --bg-elev-3: #232a35;
+  --bg-sidebar: rgba(13, 17, 23, 0.72);
+  --bg-titlebar: rgba(13, 17, 23, 0.85);
+  --line: rgba(255, 255, 255, 0.07);
+  --line-strong: rgba(255, 255, 255, 0.14);
   --fg: #d6e0ee;
+  --fg-mute: #97a3b6;
+  --fg-faint: #6a7886;
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.45);
+  --shadow-2: 0 8px 30px rgba(0, 0, 0, 0.55);
 }
 [data-theme="dusk"] {
   --accent: #ff8a5c;
@@ -67,7 +89,15 @@
   --bg-elev: #211823;
   --bg-elev-2: #2a1f2c;
   --bg-elev-3: #352736;
+  --bg-sidebar: rgba(24, 18, 26, 0.72);
+  --bg-titlebar: rgba(24, 18, 26, 0.85);
+  --line: rgba(255, 255, 255, 0.07);
+  --line-strong: rgba(255, 255, 255, 0.14);
   --fg: #f3e6e0;
+  --fg-mute: #c0aea6;
+  --fg-faint: #8a7770;
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.5);
+  --shadow-2: 0 8px 30px rgba(0, 0, 0, 0.6);
 }
 [data-theme="paper"] {
   --accent: #5a4ad1;
@@ -79,11 +109,11 @@
   --bg-elev-3: #e9e6f4;
   --bg-sidebar: rgba(255, 255, 255, 0.86);
   --bg-titlebar: rgba(255, 255, 255, 0.9);
+  --line: rgba(0, 0, 0, 0.08);
+  --line-strong: rgba(0, 0, 0, 0.16);
   --fg: #1c1b2a;
   --fg-mute: #5a5870;
   --fg-faint: #8c8aa0;
-  --line: rgba(0, 0, 0, 0.08);
-  --line-strong: rgba(0, 0, 0, 0.16);
   --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.08);
   --shadow-2: 0 8px 30px rgba(0, 0, 0, 0.12);
 }
@@ -97,11 +127,13 @@
   --bg-elev-3: #eee8c4;
   --bg-sidebar: rgba(251, 243, 223, 0.86);
   --bg-titlebar: rgba(253, 246, 227, 0.92);
+  --line: rgba(0, 0, 0, 0.08);
+  --line-strong: rgba(0, 0, 0, 0.16);
   --fg: #586e75;
   --fg-mute: #7a8c92;
   --fg-faint: #93a1a1;
-  --line: rgba(0, 0, 0, 0.08);
-  --line-strong: rgba(0, 0, 0, 0.16);
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.08);
+  --shadow-2: 0 8px 30px rgba(0, 0, 0, 0.12);
 }
 
 /* ---------- Base ------------------------------------------------------ */
@@ -373,7 +405,7 @@ code {
 }
 .streak-foot { font-size: 12.5px; color: var(--fg-mute); margin-top: 10px; }
 
-.widget-quick { display: flex; flex-direction: column; gap: 8px; }
+.widget-quick { display: flex; flex-direction: column; gap: 10px; }
 .qa {
   display: flex; align-items: center; gap: 10px;
   padding: 10px 12px; border-radius: 10px;
@@ -1132,3 +1164,212 @@ code {
 .sidebar.narrow .side-section h3 .side-chev { margin-left: 0; }
 .sidebar.narrow .side-body { display: none; }
 .sidebar.narrow .side-toggle-all { display: none; }
+/* =========================================================== Drag handle - hidden until drag
+   The chev column on every tree-file row stays at 0 width until
+   a drag starts, then animates in to hint the affordance. */
+.folder-tree .tree-file .chev {
+  width: 0;
+  margin-right: 0;
+  color: var(--fg-faint);
+  font-size: 16px;
+  opacity: 0;
+  transition: width 160ms ease, opacity 160ms ease, margin-right 160ms ease;
+}
+.folder-tree.is-dragging .tree-file .chev,
+.folder-tree .tree-file:hover .chev {
+  width: 16px;
+  margin-right: 4px;
+  opacity: 0.85;
+}
+/* Show the entire sidebar body + tree contents animate. */
+.tree-file, .folder-row, .qa, .side-action, .recent-list li {
+  transition: background 140ms ease, transform 140ms ease, color 140ms ease;
+}
+.qa:hover { transform: translateX(2px); }
+.side-action:hover { transform: translateX(2px); }
+
+/* =========================================================== Modal show animation */
+.overlay {
+  animation: overlay-in 200ms ease both;
+}
+@keyframes overlay-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.modal-card {
+  animation: modal-in 220ms cubic-bezier(.34,1.56,.64,1) both;
+}
+@keyframes modal-in {
+  from { opacity: 0; transform: translateY(20px) scale(0.96); }
+  to { opacity: 1; transform: none; }
+}
+
+/* =========================================================== Tab pill animation */
+.tab {
+  transition: background 140ms ease, color 140ms ease, transform 140ms ease;
+}
+.tab:not(.active):hover { transform: translateY(-1px); }
+.tab.active { animation: tab-pop 220ms cubic-bezier(.34,1.56,.64,1) both; }
+@keyframes tab-pop {
+  from { transform: translateY(-6px) scale(0.92); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+
+/* =========================================================== Todo checkbox animation */
+.todo-item .todo-box {
+  transition: background 180ms ease, border-color 180ms ease, transform 180ms ease;
+}
+.todo-item.done .todo-box {
+  animation: check-pop 360ms cubic-bezier(.34,1.56,.64,1) both;
+}
+@keyframes check-pop {
+  0%   { transform: scale(0.6); }
+  60%  { transform: scale(1.18); }
+  100% { transform: scale(1); }
+}
+
+/* =========================================================== Toast animation */
+.toast {
+  animation: toast-in 240ms cubic-bezier(.34,1.56,.64,1) both;
+}
+@keyframes toast-in {
+  from { opacity: 0; transform: translate(-50%, 16px) scale(0.94); }
+  to { opacity: 1; transform: translate(-50%, 0) scale(1); }
+}
+
+/* =========================================================== Editor mode-switch animation */
+.editor, .todo-surface, .preview-pane {
+  animation: surface-fade 220ms ease both;
+}
+@keyframes surface-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* =========================================================== Settings open animation refinement */
+#settings-modal .modal-card,
+#find-modal .modal-card,
+#move-modal .modal-card,
+#tag-modal .modal-card {
+  animation: modal-in 220ms cubic-bezier(.34,1.56,.64,1) both;
+}
+
+/* =========================================================== Hover lift on QA / side-actions */
+.side-action:hover, .qa:hover {
+  background: var(--bg-elev-2);
+  border-radius: 6px;
+  padding-left: 4px;
+}
+
+/* =========================================================== Sidebar header buttons pulse on click */
+.iconbtn:active { transform: scale(0.92); }
+
+/* =========================================================== Cursor on drag rows */
+.folder-row, .tree-file { cursor: default; }
+.folder-row[data-drag-handle="true"], .tree-file[draggable="true"] { cursor: grab; }
+.folder-row[data-drag-handle="true"]:active,
+.tree-file[draggable="true"]:active { cursor: grabbing; }
+/* =========================================================== PIN feedback (shake / pulse)
+   Body classes toggled by JS in response to PIN validation.
+   "pin-shake" = the card shakes and flashes red (wrong PIN).
+   "pin-pulse" = the card pulses green (correct PIN, success).
+   JS removes the class after the animation completes. */
+.pin-card.shake {
+  animation: pin-shake 380ms cubic-bezier(.36,.07,.19,.97) both;
+  box-shadow: 0 0 0 3px rgba(255, 99, 99, 0.7),
+              0 8px 30px rgba(0, 0, 0, 0.45);
+}
+@keyframes pin-shake {
+  10%, 90% { transform: translate3d(-2px, 0, 0); }
+  20%, 80% { transform: translate3d(4px, 0, 0); }
+  30%, 50%, 70% { transform: translate3d(-7px, 0, 0); }
+  40%, 60% { transform: translate3d(7px, 0, 0); }
+}
+.pin-card.flash-good {
+  animation: pin-flash-good 600ms ease both;
+}
+@keyframes pin-flash-good {
+  0%   { box-shadow: 0 0 0 3px rgba(255,255,255,0.05),
+                  0 8px 30px rgba(0, 0, 0, 0.45); }
+  35%  { box-shadow: 0 0 0 6px rgba(88, 225, 168, 0.7),
+                  0 8px 40px rgba(0, 0, 0, 0.5); }
+  100% { box-shadow: 0 0 0 3px rgba(255,255,255,0.05),
+                  0 8px 30px rgba(0, 0, 0, 0.45); }
+}
+
+/* =========================================================== Tab open animation
+   When a new tab is created it animates in from the right edge of
+   the tab strip with a tiny pop. */
+.tab.entering {
+  animation: tab-enter 320ms cubic-bezier(.34,1.56,.64,1) both;
+}
+@keyframes tab-enter {
+  0%   { transform: translateX(20px) scale(0.92); opacity: 0; }
+  100% { transform: none; opacity: 1; }
+}
+
+/* =========================================================== Preview todo click animation */
+.preview-todo-list li .todo-box {
+  transition: background 180ms ease, border-color 180ms ease, transform 180ms ease;
+}
+.preview-todo-list li .todo-box:hover {
+  transform: scale(1.1);
+  border-color: var(--accent);
+}
+.preview-todo-list li.flash-tick {
+  animation: preview-tick 360ms cubic-bezier(.34,1.56,.64,1) both;
+}
+@keyframes preview-tick {
+  0%   { transform: scale(0.6); }
+  60%  { transform: scale(1.2); }
+  100% { transform: scale(1); }
+}
+.preview-todo-list li .todo-box {
+  cursor: pointer;
+}
+
+/* =========================================================== Settings modal shake on wrong PIN
+   (the PIN input lives in the settings form, separate from the
+   app-wide PIN overlay above) */
+.pin-input.shake {
+  animation: pin-shake 380ms cubic-bezier(.36,.07,.19,.97) both;
+  border-color: var(--danger) !important;
+}
+
+/* =========================================================== Home dashboard show animation
+   The home screen fades + slides up slightly when shown, for any
+   route into the home view (initial load, toggleHome, etc.). */
+.home-screen.animate-in {
+  animation: home-in 320ms ease both;
+}
+@keyframes home-in {
+  0%   { opacity: 0; transform: translateY(12px); }
+  100% { opacity: 1; transform: none; }
+}
+
+/* =========================================================== Tab pill click feedback */
+.iconbtn.active-tab-active {
+  animation: pulse 220ms ease;
+}
+@keyframes pulse {
+  0%   { transform: scale(1); }
+  50%  { transform: scale(1.18); }
+  100% { transform: scale(1); }
+}
+/* =========================================================== Counter pulse
+   Tiny bounce when a stat number updates - reinforces that the
+   value actually changed. */
+@keyframes counter-pulse {
+  0%   { transform: scale(1); }
+  40%  { transform: scale(1.18); color: var(--accent); }
+  100% { transform: scale(1); }
+}
+.stat-value.pulse {
+  animation: counter-pulse 480ms cubic-bezier(.34,1.56,.64,1);
+  display: inline-block;
+  transform-origin: center;
+}
+#status-words.pulse {
+  animation: counter-pulse 480ms cubic-bezier(.34,1.56,.64,1);
+  display: inline-block;
+}

@@ -110,7 +110,7 @@ class JottrAPI:
     def _default_config(self) -> dict:
         return {
             "version": 2,
-            "app_version": "2.1",
+            "app_version": "2.1.3",
             "theme": "midnight",
             "accent_color": "",
             "app_pin_hash": "",
@@ -137,6 +137,7 @@ class JottrAPI:
             "preview_default": False,
             "plugins": {},
             "sidebar_collapsed": {},
+            "sidebar_hidden": False,
         }
 
     def _save_config(self) -> None:
@@ -153,7 +154,7 @@ class JottrAPI:
             "global_hotkey", "minimize_to_tray", "show_home",
             "explorer_context_menu", "font_size", "show_line_numbers",
             "word_wrap", "pinned", "preview_default",
-            "tags", "pins", "plugins", "sidebar_collapsed",
+            "tags", "pins", "plugins", "sidebar_collapsed", "sidebar_hidden",
         }
         with self._lock:
             for k, v in patch.items():

@@ -116,28 +116,42 @@
   }
 
   function applyTheme(theme) {
+    // The data-theme attribute goes on the <html> element. CSS rules
+    // like [data-theme="paper"] then match html, so every descendant
+    // picks up that theme's CSS custom properties via inheritance.
+    // CRITICAL: we removed data-theme from <body> in the HTML so the
+    // body cannot "win" with its own stale theme.
     document.documentElement.dataset.theme = theme || "midnight";
+
+    // Accent colors come in two flavors:
+    //   1. THEME DEFAULT  - the [data-theme="..."] CSS rule defines
+    //      --accent. We clear any inline override so the theme wins.
+    //   2. CUSTOM ACCENT   - the user picked a color in Settings and
+    //      we set it inline on <html> so it cascades to every child.
+    // The "use_custom_accent" flag in config decides which path we
+    // take. Default is FALSE so a fresh install uses the theme accent.
     const cfg = state.config || {};
-    // Only apply a custom accent if the user explicitly set one that
-    // differs from the theme's default. Otherwise let the theme
-    // variable drive the accent so theme switches are visible.
-    const themeDefaultAccents = {
+    const themeDefaults = {
       midnight: "#7c5cff",
       graphite: "#5cc8ff",
       dusk:     "#ff8a5c",
       paper:    "#5a4ad1",
       solar:    "#cb4b16",
     };
-    const themeDefault = themeDefaultAccents[theme || "midnight"] || "#7c5cff";
-    const hasCustom = !!cfg.accent_color
-        && cfg.accent_color.toLowerCase() !== themeDefault.toLowerCase();
-    if (hasCustom) {
+    const themeDefault = (themeDefaults[theme || "midnight"]
+                          || "#7c5cff").toLowerCase();
+    const customAccent = (cfg.accent_color || "").trim().toLowerCase();
+    const useCustom = cfg.accent_color_use === true
+                      && !!customAccent
+                      && customAccent !== themeDefault;
+    // Always clear inline accent first so the CSS rule can re-assert
+    // itself, then re-apply the custom one if needed.
+    const root = document.documentElement;
+    root.style.removeProperty("--accent");
+    root.style.removeProperty("--accent-2");
+    root.style.removeProperty("--accent-soft");
+    if (useCustom) {
       applyAccentColor(cfg.accent_color);
-    } else {
-      // Remove our inline accent override so the theme's CSS applies.
-      document.documentElement.style.removeProperty("--accent");
-      document.documentElement.style.removeProperty("--accent-2");
-      document.documentElement.style.removeProperty("--accent-soft");
     }
   }
 
@@ -197,6 +211,7 @@
     $("#btn-quit").addEventListener("click", quitApp);
     $("#btn-preview").addEventListener("click", () => togglePreview());
     $("#btn-find").addEventListener("click", () => openFind());
+    $("#btn-sidebar").addEventListener("click", toggleSidebar);
 
     // Sidebar quick actions
     $("#quick-new-note").addEventListener("click", (e) => { e.preventDefault(); newNote(); });
@@ -304,6 +319,11 @@
     const accentPicker = $("#set-accent");
     if (accentPicker) {
       accentPicker.addEventListener("input", (e) => {
+        // Picking a color in the picker implies the user wants to
+        // override the theme accent. Auto-check the override toggle
+        // so what they see in the live preview is what gets saved.
+        const cb = $("#set-accent-custom");
+        if (cb) cb.checked = true;
         applyAccentColor(e.target.value);
       });
     }
@@ -368,14 +388,42 @@
     window.addEventListener("focus", onWindowFocus);
   }
 
+  // Play the wrong/correct PIN feedback animation on the pin-card.
+  function pinShake() {
+    const card = $(".pin-card");
+    if (!card) return;
+    card.classList.remove("shake", "flash-good");
+    // Force reflow so the animation restarts on rapid retries.
+    void card.offsetWidth;
+    card.classList.add("shake");
+    setTimeout(() => card.classList.remove("shake"), 420);
+  }
+  function pinPulseGood() {
+    const card = $(".pin-card");
+    if (!card) return;
+    card.classList.remove("shake", "flash-good");
+    void card.offsetWidth;
+    card.classList.add("flash-good");
+    setTimeout(() => card.classList.remove("flash-good"), 640);
+  }
+
   async function tryUnlock() {
     const pin = $("#pin-input").value;
     if (!hasApi()) { $("#pin-error").textContent = "Backend not ready"; return; }
     try {
       const out = await pycall("verify_app_pin", pin);
-      if (out.ok) { hidePin(); enterApp(); }
-      else { $("#pin-error").textContent = "Wrong PIN"; $("#pin-input").select(); }
-    } catch (e) { $("#pin-error").textContent = "Unlock failed"; }
+      if (out.ok) {
+        pinPulseGood();
+        setTimeout(() => { hidePin(); enterApp(); }, 220);
+      } else {
+        pinShake();
+        $("#pin-error").textContent = "Wrong PIN";
+        $("#pin-input").select();
+      }
+    } catch (e) {
+      pinShake();
+      $("#pin-error").textContent = "Unlock failed";
+    }
   }
 
   function onWindowFocus() {
@@ -403,6 +451,10 @@
     refreshPinned();
     refreshFolderTree();
     refreshStats();
+    // Restore sidebar visibility from config (animates on boot).
+    if (state.config && state.config.sidebar_hidden) {
+      document.body.classList.add("sidebar-hidden");
+    }
     if (state.config && state.config.show_home && state.tabs.length === 0) {
       toggleHome(true);
     } else {
@@ -421,7 +473,14 @@
   // ----------------------------------------------------------- Tabs
   function onTabClick(e) {
     const add = e.target.closest(".tab-add");
-    if (add) { e.preventDefault(); newNote(); return; }
+    if (add) {
+      e.preventDefault();
+      // Clicking the + icon opens the dashboard so the user can
+      // see their options, then creates a fresh note inside it.
+      toggleHome(true);
+      newNote();
+      return;
+    }
     const tabEl = e.target.closest(".tab");
     if (!tabEl) return;
     const name = tabEl.dataset.name;
@@ -524,8 +583,10 @@
       row.dataset.openFile = node.name;
       row.draggable = true;
       if (state.activeTab === node.name) row.classList.add("is-active");
+      // No visible drag handle - the whole row is draggable, and the
+      // drag_indicator chev only shows while a drag is in flight.
       const chev = document.createElement("span");
-      chev.className = "chev material-symbols-outlined";
+      chev.className = "chev material-symbols-outlined drag-handle";
       chev.textContent = "drag_indicator";
       const ico = document.createElement("span");
       ico.className = "material-symbols-outlined file-ico";
@@ -593,38 +654,61 @@
   // Track which PINs we've already verified in this session
   // so we don't re-prompt every time the user re-opens a tab.
   const unlocked = new Set();
+  // Track in-flight openTab calls so double-clicks don't spawn two
+  // of the same tab.
+  const pendingOpens = new Set();
+  // Normalize a note name so "Work/Ideas.md" and "work/ideas.md"
+  // are treated as the same tab.
+  function normalizeName(n) {
+    return String(n || "").replace(/\\/g, "/").replace(/\/+$/, "");
+  }
 
   async function openTab(name) {
     if (!hasApi()) return;
-    if (state.tabs.find((t) => t.name === name)) {
-      activateTab(name);
+    const key = normalizeName(name);
+    // Already open? Just activate and bail.
+    if (state.tabs.find((t) => normalizeName(t.name) === key)) {
+      activateTab(state.tabs.find((t) => normalizeName(t.name) === key).name);
       return;
     }
-    // PIN gate: if this file (or any parent folder) has a PIN, ask
-    // for it before reading the file. PINs are stored in config.json
-    // (NOT as a header inside the file itself).
-    if (!unlocked.has(name) && !unlocked.has("__app__")) {
+    // Already in-flight? Wait for it instead of opening a duplicate.
+    if (pendingOpens.has(key)) return;
+    pendingOpens.add(key);
+    try {
+      // PIN gate: if this file (or any parent folder) has a PIN,
+      // ask for it before reading the file. PINs live in config.json.
+      if (!unlocked.has(key) && !unlocked.has("__app__")) {
+        try {
+          const c = await pycall("check_pin", key, "");
+          if (c && c.required) {
+            const ok = await promptForPin(c.scope === "folder"
+                ? "This folder is locked. Enter its PIN:"
+                : "This file is locked. Enter its PIN:");
+            if (!ok) { toast("Cancelled - file not opened", "info"); return; }
+            const v = await pycall("check_pin", key, ok);
+            if (!v.ok) { toast("Wrong PIN", "error"); return; }
+            unlocked.add(key);
+            toast("Unlocked " + (c.scope === "folder" ? "folder" : "file"), "lock_open");
+          }
+        } catch (e) { /* ignore */ }
+      }
+      // Filter folders out of "open as a tab". If the user clicks a
+      // folder anywhere (recent list etc.) we just no-op.
       try {
-        const c = await pycall("check_pin", name, "");
-        if (c && c.required) {
-          const ok = await promptForPin(c.scope === "folder"
-              ? "This folder is locked. Enter its PIN:"
-              : "This file is locked. Enter its PIN:");
-          if (!ok) { toast("Cancelled - file not opened", "info"); return; }
-          const v = await pycall("check_pin", name, ok);
-          if (!v.ok) {
-            toast("Wrong PIN", "error");
+        const tree = await pycall("list_tree");
+        if (tree && tree.ok) {
+          const isFolder = (tree.tree || []).some((n) =>
+            n.kind === "folder" && n.name === key);
+          if (isFolder) {
+            toast("Folders can't be opened - click to expand", "folder");
             return;
           }
-          unlocked.add(name);
-          toast("Unlocked " + (c.scope === "folder" ? "folder" : "file"), "lock_open");
         }
       } catch (e) { /* ignore */ }
-    }
-    try {
-      const r = await pycall("read_note", name);
+
+      const r = await pycall("read_note", key);
       const tab = {
-        name,
+        name: key,
         content: r.content || "",
         mtime: r.mtime || 0,
         dirty: false,
@@ -633,14 +717,17 @@
         todoMode: isTodoTrigger(r.content || ""),
       };
       state.tabs.push(tab);
+      lastOpened = key;
       renderTabBar();
       renderEditor(tab);
-      activateTab(name);
+      activateTab(key);
       refreshRecent();
       refreshPinned();
       refreshFolderTree();
     } catch (e) {
       toast("Read failed: " + e.message, "error");
+    } finally {
+      pendingOpens.delete(key);
     }
   }
 
@@ -778,13 +865,19 @@
     updatePreviewButton();
   }
 
+  // Track the most-recently-opened tab so renderTabBar can give it
+  // an "entering" class for one render cycle (drives the slide-in).
+  let lastOpened = null;
+
   function renderTabBar() {
     const bar = $("#tabbar");
     bar.innerHTML = "";
     state.tabs.forEach((t) => {
       const el = document.createElement("div");
-      el.className = "tab" + (t.name === state.activeTab ? " active" : "")
-        + (t.dirty ? " dirty" : "");
+      const activeCls = t.name === state.activeTab ? " active" : "";
+      const dirtyCls = t.dirty ? " dirty" : "";
+      const enterCls = (t.name === lastOpened) ? " entering" : "";
+      el.className = "tab" + activeCls + dirtyCls + enterCls;
       el.dataset.name = t.name;
       el.title = t.name;
       const icon = document.createElement("span");
@@ -798,10 +891,16 @@
       close.innerHTML = '<span class="material-symbols-outlined">close</span>';
       el.append(icon, label, close);
       bar.appendChild(el);
+      if (t.name === lastOpened) {
+        // Remove the entering class after the animation so the tab
+        // settles into the normal layout.
+        setTimeout(() => el.classList.remove("entering"), 360);
+        lastOpened = null;
+      }
     });
     const add = document.createElement("div");
     add.className = "tab-add";
-    add.title = "New note (Ctrl+N)";
+    add.title = "New note / open dashboard (Ctrl+N)";
     add.innerHTML = '<span class="material-symbols-outlined">add</span>';
     bar.appendChild(add);
   }
@@ -947,6 +1046,44 @@
   function escapeHtml(s) {
     return s.replace(/[&<>]/g, (c) =>
       ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+  }
+
+  // ----------------------------------------------------------- Animated counters
+  // Renders an integer into `el` and tweens from the previously
+  // shown value to `target` using an easeOutQuart curve so the
+  // animation slows down at the end (each digit appears to roll
+  // into place).
+  function tweenNumber(el, target, duration) {
+    if (!el) return;
+    const targetN = Number(target) || 0;
+    const prev = parseInt(el.dataset.rolling || "0", 10) || 0;
+    if (prev === targetN) {
+      el.textContent = targetN.toLocaleString();
+      return;
+    }
+    if (el._rollingRaf) cancelAnimationFrame(el._rollingRaf);
+    const dur = duration || Math.max(420, Math.min(1100, Math.abs(targetN - prev) * 18));
+    // Subtle bounce when the value lands.
+    el.classList.remove("pulse");
+    void el.offsetWidth;
+    el.classList.add("pulse");
+    const start = performance.now();
+    function step(now) {
+      const t = Math.min(1, (now - start) / dur);
+      // Ease out quart - strong slow-down at the end.
+      const eased = 1 - Math.pow(1 - t, 4);
+      const v = Math.round(prev + (targetN - prev) * eased);
+      el.textContent = v.toLocaleString();
+      if (t < 1) {
+        el._rollingRaf = requestAnimationFrame(step);
+      } else {
+        el.textContent = targetN.toLocaleString();
+        el.dataset.rolling = String(targetN);
+        el._rollingRaf = null;
+      }
+    }
+    el.dataset.rolling = String(prev);  // mark "in flight" from prev
+    el._rollingRaf = requestAnimationFrame(step);
   }
 
   // Detect whether a string looks like a URL.
@@ -1227,6 +1364,10 @@
       box.tabIndex = 0;
       const onToggle = (e) => {
         e.preventDefault();
+        // Animate the box ticking on/off so the action has weight.
+        li.classList.remove("flash-tick");
+        void li.offsetWidth;
+        li.classList.add("flash-tick");
         toggleTodo(tab, idx);
         flushSave(tab).catch(() => {});
         renderPreview(tab);
@@ -1547,7 +1688,34 @@
     const v = tab.textarea.value;
     const words = (v.match(/\S+/g) || []).length;
     const c = $("#status-count");
-    if (c) c.textContent = words + " words / " + v.length + " chars";
+    if (!c) return;
+    // Compose the status text. Animate the WORDS portion only when
+    // it actually changes - char count jumps are usually 1 at a time.
+    const curWords = parseInt(c.dataset.words || "0", 10) || 0;
+    const curChars = parseInt(c.dataset.chars || "0", 10) || 0;
+    if (curWords === words && curChars === v.length) return;
+    c.dataset.words = String(words);
+    c.dataset.chars = String(v.length);
+    // Roll up the words number only; leave chars alone (they tick 1-by-1).
+    const oldHTML = c.innerHTML;
+    c.innerHTML = "";
+    const wordsSpan = document.createElement("span");
+    wordsSpan.id = "status-words";
+    wordsSpan.textContent = words.toLocaleString();
+    c.appendChild(wordsSpan);
+    c.appendChild(document.createTextNode(" words / "));
+    const charsSpan = document.createElement("span");
+    charsSpan.id = "status-chars";
+    charsSpan.textContent = v.length.toLocaleString();
+    c.appendChild(charsSpan);
+    c.appendChild(document.createTextNode(" chars"));
+    // Roll up just the words number.
+    if (curWords !== words) {
+      tweenNumber(wordsSpan, words, 480);
+    } else {
+      wordsSpan.textContent = words.toLocaleString();
+    }
+    charsSpan.textContent = v.length.toLocaleString();
   }
 
   // ----------------------------------------------------------- Recent / Pinned / Stats
@@ -1556,7 +1724,11 @@
     try {
       const r = await pycall("list_notes");
       const cfgRec = (state.config && state.config.recent) || [];
-      const recent = cfgRec.length ? cfgRec : (r.files || []).map((f) => f.name);
+      // Filter to actual files (no folders) - Jottr shouldn't try to
+      // open folders as tabs.
+      const fileSet = new Set((r.files || []).map((f) => f.name));
+      let recent = cfgRec.filter((n) => fileSet.has(n));
+      if (!recent.length) recent = (r.files || []).map((f) => f.name).slice(0, 8);
       renderRecentList(recent, "recent-list");
     } catch (e) { renderRecentList([], "recent-list"); }
   }
@@ -1617,7 +1789,14 @@
       setStreakFoot("Stats unavailable");
     }
   }
-  function setStat(id, value) { const el = $("#" + id); if (el) el.textContent = value; }
+  function setStat(id, value) {
+    const el = $("#" + id);
+    if (!el) return;
+    // Roll-up animation for stats. textContent of `value` could already
+    // include thousands separators; we coerce to number for the tween.
+    const n = Number(String(value).replace(/,/g, "")) || 0;
+    tweenNumber(el, n);
+  }
   function setStreakFoot(text) { const el = $("#streak-foot"); if (el) el.textContent = text; }
   function buildFallbackSeries() {
     const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -1659,6 +1838,18 @@
     return d.getFullYear() + "-" + m + "-" + dd;
   }
 
+  // ----------------------------------------------------------- Sidebar toggle
+  function toggleSidebar() {
+    const hidden = document.body.classList.toggle("sidebar-hidden");
+    // Persist preference
+    if (state.config) {
+      state.config.sidebar_hidden = hidden;
+      if (hasApi()) {
+        pycall("update_settings", { sidebar_hidden: hidden }).catch(() => {});
+      }
+    }
+  }
+
   // ----------------------------------------------------------- Home
   function toggleHome(force) {
     const show = force === true ? true : force === false ? false : !state.homeVisible;
@@ -1690,6 +1881,10 @@
     $("#set-theme").value = state.config.theme || "midnight";
     $("#set-accent").value = state.config.accent_color || "#7c5cff";
     $("#set-accent-preset").value = "";
+    // The override toggle is ON when the user explicitly opted into a
+    // custom accent (config.accent_color_use === true).
+    const ac = $("#set-accent-custom");
+    if (ac) ac.checked = state.config.accent_color_use === true;
     $("#set-fontsize").value = state.config.font_size || 14;
     $("#set-lineno").checked = state.config.show_line_numbers !== false;
     $("#set-wrap").checked = !!state.config.word_wrap;
@@ -1756,9 +1951,23 @@
   async function saveSettings() {
     if (!hasApi()) { toast("Backend not ready", "error"); return; }
     const accent = $("#set-accent").value.trim();
+    const useCustom = !!$("#set-accent-custom") && $("#set-accent-custom").checked;
+    const themeDefaults = {
+      midnight: "#7c5cff", graphite: "#5cc8ff", dusk: "#ff8a5c",
+      paper:    "#5a4ad1", solar:   "#cb4b16",
+    };
+    const themeNow = $("#set-theme").value || "midnight";
+    const themeDefault = (themeDefaults[themeNow] || "#7c5cff").toLowerCase();
+    const accentClean = /^#?[0-9a-f]{6}$/i.test(accent) ?
+      (accent.startsWith("#") ? accent : "#" + accent) : "";
+    const customDiffers = !!accentClean && accentClean.toLowerCase() !== themeDefault;
+    // Only mark as "use custom" when the toggle is on AND the color
+    // differs from the selected theme's default.
+    const willUseCustom = useCustom && customDiffers;
     const patch = {
       theme: $("#set-theme").value,
-      accent_color: /^#?[0-9a-f]{6}$/i.test(accent) ? (accent.startsWith("#") ? accent : "#" + accent) : undefined,
+      accent_color: accentClean || "",
+      accent_color_use: willUseCustom,
       font_size: parseInt($("#set-fontsize").value, 10) || 14,
       show_line_numbers: $("#set-lineno").checked,
       word_wrap: $("#set-wrap").checked,
@@ -1781,6 +1990,8 @@
     try {
       await pycall("update_settings", patch);
       state.config = Object.assign({}, state.config, patch);
+      // applyTheme reads state.config to decide whether the custom
+      // accent should override the theme accent.
       applyTheme(state.config.theme);
       state.tabs.forEach((t) => {
         if (!t.el) return;
@@ -2132,6 +2343,7 @@
 
     if (ctrl && !e.shiftKey && !e.altKey) {
       const k = e.key.toLowerCase();
+      if (k === "b") { e.preventDefault(); toggleSidebar(); return; }
       if (k === "n") { e.preventDefault(); newNote(); return; }
       if (k === "t") { e.preventDefault(); newTodo(); return; }
       if (k === "o") { e.preventDefault(); openExternal(); return; }
@@ -2308,7 +2520,6 @@
   //                    DRAG-AND-DROP INTO FOLDERS
   // ============================================================
   function attachDragHandlers() {
-    // Run after the folder tree is in the DOM.
     const tree = $("#folder-tree");
     if (!tree) return;
     tree.addEventListener("dragstart", (e) => {
@@ -2317,11 +2528,14 @@
       e.dataTransfer.setData("text/jottr-file", file.dataset.openFile);
       e.dataTransfer.effectAllowed = "move";
       file.classList.add("dragging");
+      // Reveal the drag-handle column on every file row.
+      tree.classList.add("is-dragging");
     });
     tree.addEventListener("dragend", (e) => {
       const file = e.target.closest(".tree-file");
       if (file) file.classList.remove("dragging");
       $$(".folder-row.dragover").forEach((f) => f.classList.remove("dragover"));
+      tree.classList.remove("is-dragging");
     });
     tree.addEventListener("dragover", (e) => {
       const folder = e.target.closest(".folder-row");

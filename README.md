@@ -2,7 +2,7 @@
 
 <img src="website/assets/logo.svg" alt="Jottr" width="96" />
 
-# Jottr
+# Jottr V2.1
 
 **A tabbed notepad with atomic auto-save, PIN-protected files and a Windows-style home screen.**
 
@@ -174,7 +174,7 @@ highlights, and the home screen widgets slide in on load.
 ### Run from source
 
 ```bash
-git clone https://github.com/yourname/jottr.git
+git clone https://github.com/Compromisee/Jottr.git
 cd jottr
 python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install pywebview pystray pillow keyboard
@@ -310,6 +310,7 @@ If you add a feature, please:
 4. Add a smoke-test bullet to `packaging.md`.
 
 ---
+
 
 ## License
 
