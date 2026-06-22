@@ -87,6 +87,18 @@
 
       <section class="side-section">
         <h3>
+          <span>Notes</span>
+          <button id="folder-add" class="iconbtn" title="New folder">
+            <span class="material-symbols-outlined">create_new_folder</span>
+          </button>
+        </h3>
+        <div id="folder-tree" class="folder-tree">
+          <div class="side-empty">Loading...</div>
+        </div>
+      </section>
+
+      <section class="side-section">
+        <h3>
           <span>Pinned</span>
           <span class="material-symbols-outlined side-h-icon">push_pin</span>
         </h3>
@@ -151,6 +163,20 @@
           <h1>Welcome back</h1>
           <p>Pick up where you left off, or start something new.</p>
         </div>
+
+        <div class="home-search-bar">
+          <span class="material-symbols-outlined">search</span>
+          <input id="home-search" type="text"
+                 placeholder="Search notes and todos..."
+                 autocomplete="off" spellcheck="false" />
+          <button id="home-search-clear" class="iconbtn" title="Clear search">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </div>
+
+        <div id="home-search-wrap" class="home-search-wrap hidden">
+          <ul id="home-search-results" class="home-recent"></ul>
+        </div>
         <div class="home-grid">
           <div class="widget widget-streak">
             <div class="widget-head">
@@ -196,6 +222,10 @@
             <button class="qa" data-action="theme">
               <span class="material-symbols-outlined">contrast</span>
               Cycle theme
+            </button>
+            <button class="qa" data-action="accent">
+              <span class="material-symbols-outlined">palette</span>
+              Cycle accent color
             </button>
           </div>
           <div class="widget widget-recent">
@@ -312,6 +342,23 @@
           </select>
         </label>
         <label class="field">
+          <span>Accent color</span>
+          <div class="accent-row">
+            <input id="set-accent" type="color" value="#7c5cff" />
+            <select id="set-accent-preset">
+              <option value="">Presets...</option>
+              <option value="#7c5cff">Purple (default)</option>
+              <option value="#5cc8ff">Cyan</option>
+              <option value="#58e1a8">Mint</option>
+              <option value="#ff8ad1">Pink</option>
+              <option value="#ffb86b">Amber</option>
+              <option value="#ff6363">Coral</option>
+              <option value="#cb4b16">Rust</option>
+              <option value="#e8a16c">Sand</option>
+            </select>
+          </div>
+        </label>
+        <label class="field">
           <span>Font size</span>
           <input id="set-fontsize" type="number" min="10" max="28" step="1" value="14" />
         </label>
@@ -352,7 +399,10 @@
         </label>
         <label class="field">
           <span>Global hotkey (toggle window)</span>
-          <input id="set-hotkey" type="text" placeholder="ctrl+alt+j" />
+          <select id="set-hotkey"></select>
+          <input id="set-hotkey-custom" type="text"
+                 placeholder="e.g. ctrl+shift+space"
+                 style="display:none;margin-top:6px" />
         </label>
         <label class="field toggle">
           <span>Default to preview mode for new notes</span>
@@ -427,13 +477,16 @@
   </div>
 </div>
 
-<!-- ============================================================ Context menu -->
+<!-- ============================================================ Context menu (file) -->
 <div id="ctx-menu" class="ctx-menu hidden" role="menu">
   <button data-act="open" role="menuitem">
     <span class="material-symbols-outlined">open_in_new</span> Open
   </button>
   <button data-act="pin" role="menuitem" id="ctx-pin">
     <span class="material-symbols-outlined">push_pin</span> <span class="ctx-pin-label">Pin to sidebar</span>
+  </button>
+  <button data-act="move" role="menuitem" id="ctx-move">
+    <span class="material-symbols-outlined">drive_file_move</span> Move to folder&hellip;
   </button>
   <button data-act="reveal" role="menuitem">
     <span class="material-symbols-outlined">folder</span> Reveal in Explorer
@@ -448,6 +501,45 @@
   <button data-act="delete" class="danger" role="menuitem">
     <span class="material-symbols-outlined">delete</span> Delete
   </button>
+</div>
+
+<!-- ============================================================ Context menu (folder) -->
+<div id="ctx-folder" class="ctx-menu hidden" role="menu">
+  <button data-fact="note" role="menuitem">
+    <span class="material-symbols-outlined">note_add</span> New note here
+  </button>
+  <button data-fact="todo" role="menuitem">
+    <span class="material-symbols-outlined">checklist</span> New todo here
+  </button>
+  <button data-fact="subfolder" role="menuitem">
+    <span class="material-symbols-outlined">create_new_folder</span> New subfolder
+  </button>
+  <div class="ctx-sep"></div>
+  <button data-fact="reveal" role="menuitem">
+    <span class="material-symbols-outlined">folder_open</span> Reveal in Explorer
+  </button>
+  <button data-fact="rename" role="menuitem">
+    <span class="material-symbols-outlined">drive_file_rename_outline</span> Rename
+  </button>
+  <button data-fact="delete" class="danger" role="menuitem">
+    <span class="material-symbols-outlined">delete</span> Delete folder
+  </button>
+</div>
+
+<!-- ============================================================ Move-to-folder picker -->
+<div id="move-modal" class="overlay hidden" aria-hidden="true">
+  <div class="modal-card move-card">
+    <header class="modal-head">
+      <h2>Move to folder</h2>
+      <button class="iconbtn" id="move-close">
+        <span class="material-symbols-outlined">close</span>
+      </button>
+    </header>
+    <div class="modal-body">
+      <p class="hint" id="move-source"></p>
+      <ul id="move-folders" class="folder-pick"></ul>
+    </div>
+  </div>
 </div>
 
 <!-- ============================================================ Toast -->

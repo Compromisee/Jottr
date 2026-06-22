@@ -2,8 +2,9 @@
 Jottr - A tabbed notepad with atomic auto-save, PIN-protected files,
 a Windows-style home screen and a tiny todo list.
 
-Entry point. Creates the pywebview window, tray icon, global hotkey,
-and starts the backend bridge. 
+Entry point. Creates the pywebview window, sets the taskbar / window
+icon on Windows, starts the tray icon, global hotkey, and the
+backend bridge.
 """
 from __future__ import annotations
 
@@ -18,10 +19,37 @@ from backend import JottrAPI
 APP_NAME = "Jottr"
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 UI_DIR = os.path.join(APP_DIR, "ui")
-ICON_PATH = os.path.join(APP_DIR, "assets", "icon.png")
+ICON_PNG = os.path.join(APP_DIR, "assets", "icon.png")
+ICON_ICO = os.path.join(APP_DIR, "assets", "icon.ico")
+
+
+def pick_icon() -> str | None:
+    """Pick the right icon file for the current OS. Windows prefers
+    .ico, others can use the .png."""
+    if sys.platform == "win32" and os.path.isfile(ICON_ICO):
+        return ICON_ICO
+    if os.path.isfile(ICON_PNG):
+        return ICON_PNG
+    return None
+
+
+def set_windows_taskbar_identity() -> None:
+    """On Windows, register an explicit AppUserModelID so the taskbar
+    can group and identify Jottr's windows correctly. pywebview will
+    still need a proper icon to display one in the taskbar."""
+    if sys.platform != "win32":
+        return
+    try:
+        import ctypes
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(
+            "jottr.notepad.app")
+    except Exception:
+        pass
 
 
 def main() -> None:
+    set_windows_taskbar_identity()
+
     api = JottrAPI(app_name=APP_NAME, app_dir=APP_DIR)
 
     window = webview.create_window(
@@ -43,7 +71,13 @@ def main() -> None:
     threading.Thread(target=api.start_tray, args=(window,), daemon=True).start()
     threading.Thread(target=api.start_global_hotkey, args=(window,), daemon=True).start()
 
-    webview.start(debug=False, gui="edgechromium" if sys.platform == "win32" else None)
+    # Pass the icon to webview.start so the window gets the proper
+    # taskbar / Alt-Tab icon on every supported OS.
+    webview.start(
+        debug=False,
+        gui="edgechromium" if sys.platform == "win32" else None,
+        icon=pick_icon(),
+    )
 
 
 if __name__ == "__main__":

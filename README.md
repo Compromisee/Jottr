@@ -41,7 +41,10 @@ so it runs anywhere Python and a browser engine do.
 - **Markdown** highlighting (headings, bold/italic, code, links).
 - **Preview mode** with eye toggle (Ctrl+Shift+V) - hides the
   editor and renders the note with proper headings, code blocks,
-  lists, blockquotes and inline formatting.
+  lists, blockquotes and inline formatting. In preview mode you
+  can still **click a todo checkbox** to mark an item done.
+- **Search** (Ctrl+Shift+H on the home screen) - filters across
+  every note by content with snippets.
 - **Line numbers** with an active-line indicator and live `Ln/Col`
   status.
 - **Find / Replace** (Ctrl+F) with case-sensitive and whole-word
@@ -64,6 +67,9 @@ so it runs anywhere Python and a browser engine do.
 - **Rename** and **delete** from the right-click menu.
 - **Open with Jottr** registers an Explorer context-menu entry
   (one toggle in Settings).
+- **Custom accent color** - pick any color in Settings or cycle
+  through presets. The active tab indicator, buttons and highlights
+  follow it instantly.
 
 ### Security
 
@@ -177,6 +183,7 @@ For an installer, see [`packaging.md`](./packaging.md) section 4.
 | `Ctrl+Tab` | Cycle tabs |
 | `Ctrl+Shift+V` | Toggle preview mode |
 | `Ctrl+Shift+P` | Cycle theme |
+| `Ctrl+Shift+H` | Focus home search |
 | `Ctrl+Shift+L` | Lock now |
 | `Ctrl+Alt+J` | Toggle window (configurable) |
 

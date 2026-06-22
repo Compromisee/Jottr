@@ -110,6 +110,7 @@ class JottrAPI:
         return {
             "version": 1,
             "theme": "midnight",
+            "accent_color": "#7c5cff",
             "app_pin_hash": "",
             "pin_scope": "app",            # "app" or "per_file"
             "startup": False,
@@ -142,10 +143,10 @@ class JottrAPI:
     def update_settings(self, patch: dict) -> dict:
         # Whitelist updatable keys.
         allowed = {
-            "theme", "app_pin_hash", "pin_scope", "startup", "global_hotkey",
-            "minimize_to_tray", "show_home", "explorer_context_menu",
-            "font_size", "show_line_numbers", "word_wrap",
-            "pinned", "preview_default",
+            "theme", "accent_color", "app_pin_hash", "pin_scope", "startup",
+            "global_hotkey", "minimize_to_tray", "show_home",
+            "explorer_context_menu", "font_size", "show_line_numbers",
+            "word_wrap", "pinned", "preview_default",
         }
         with self._lock:
             for k, v in patch.items():
@@ -192,84 +193,356 @@ class JottrAPI:
     def has_app_pin(self) -> dict:
         return {"required": bool(self.config.get("app_pin_hash"))}
 
+    # -- Search -------------------------------------------------------------
+    def search_notes(self, term, limit=20) -> dict:
+        """Case-insensitive substring search across all notes.
+        Returns a list of {name, snippet, kind} hits ordered by
+        recent mtime."""
+        if not term or not term.strip():
+            return {"ok": True, "results": []}
+        needle = term.strip().lower()
+        out = []
+        # Walk recursively so notes in folders are searchable too.
+        paths = []
+        def walk(d: Path):
+            try:
+                for p in sorted(d.iterdir(), key=lambda x: x.name.lower()):
+                    if p.name.startswith("."):
+                        continue
+                    if p.is_dir():
+                        walk(p)
+                    elif self._note_ext_ok(p.name):
+                        paths.append(p)
+            except Exception:
+                pass
+        walk(self.notes_dir)
+        paths.sort(key=lambda p: p.stat().st_mtime if p.exists() else 0, reverse=True)
+        for p in paths:
+            try:
+                txt = _safe_read(p)
+            except Exception:
+                continue
+            low = txt.lower()
+            i = low.find(needle)
+            if i < 0:
+                continue
+            start = max(0, i - 30)
+            end = min(len(txt), i + len(needle) + 40)
+            snippet = txt[start:end].replace("\n", " ")
+            if start > 0:
+                snippet = "..." + snippet
+            if end < len(txt):
+                snippet = snippet + "..."
+            try:
+                full_name = str(p.relative_to(self.notes_dir.resolve())).replace("\\", "/")
+            except ValueError:
+                full_name = p.name
+            out.append({
+                "name": full_name,
+                "snippet": snippet,
+                "kind": "todo" if txt.lstrip().startswith("**todolist**") else "note",
+                "mtime": p.stat().st_mtime,
+            })
+            if len(out) >= int(limit or 20):
+                break
+        return {"ok": True, "results": out}
+
     # -- Notes: list / read / save / delete --------------------------------
-    def list_notes(self) -> dict:
-        files = []
-        for p in sorted(self.notes_dir.glob("*")):
-            if p.is_file() and p.suffix.lower() in (".md", ".txt", ".jot"):
+    def _safe_resolve(self, name: str) -> Path:
+        """Resolve a possibly-folder-qualified name to a path inside
+        notes_dir. Rejects absolute paths, '..' traversal, dotfiles,
+        and any other escape attempts. Always returns an absolute path
+        (which may not yet exist)."""
+        if not name or not isinstance(name, str):
+            raise ValueError("invalid name")
+        clean = name.replace("\\", "/").strip("/")
+        if not clean or clean.startswith("/") or "\x00" in clean:
+            raise ValueError("invalid name")
+        parts = [p for p in clean.split("/") if p]
+        if not parts or any(p in (".", "..") or p.startswith(".") for p in parts):
+            raise ValueError("invalid name")
+        path = (self.notes_dir / clean).resolve()
+        notes_resolved = self.notes_dir.resolve()
+        if notes_resolved not in path.parents and path != notes_resolved:
+            raise ValueError("path escapes notes dir")
+        return path
+
+    @staticmethod
+    def _note_ext_ok(name: str) -> bool:
+        return name.lower().endswith((".md", ".txt", ".jot"))
+
+    def _split_note_name(self, full: str) -> tuple:
+        """Split 'work/sub/ideas.md' -> ('work/sub', 'ideas.md')."""
+        full = (full or "").replace("\\", "/").strip("/")
+        if "/" in full:
+            folder, base = full.rsplit("/", 1)
+            return folder, base
+        return "", full
+
+    def list_notes(self, folder: str = "") -> dict:
+        """List notes + immediate subfolders of `folder` ("" = root).
+        Returns ok, folder, notes[{name,size,modified}], folders[]."""
+        try:
+            base = self._safe_resolve(folder) if folder else self.notes_dir
+        except ValueError as e:
+            return {"ok": False, "error": str(e)}
+        if not base.exists() or not base.is_dir():
+            return {"ok": False, "error": "folder not found"}
+        notes = []
+        folders = []
+        try:
+            children = sorted(base.iterdir(), key=lambda p: (not p.is_dir(), p.name.lower()))
+        except Exception:
+            children = []
+        for p in children:
+            if p.name.startswith("."):
+                continue
+            try:
+                rel = p.relative_to(self.notes_dir.resolve())
+                full_name = str(rel).replace("\\", "/")
+            except ValueError:
+                full_name = p.name
+            if p.is_dir():
+                folders.append(full_name)
+            elif self._note_ext_ok(p.name):
                 st = p.stat()
-                files.append({
-                    "name": p.name,
-                    "path": str(p),
+                notes.append({
+                    "name": full_name,
                     "size": st.st_size,
                     "modified": st.st_mtime,
                 })
-        return {"ok": True, "files": files, "dir": str(self.notes_dir)}
+        rel = str(base.relative_to(self.notes_dir.resolve())).replace("\\", "/")
+        return {
+            "ok": True,
+            "folder": rel if rel != "." else "",
+            "notes": notes,
+            "folders": folders,
+        }
+
+    def list_tree(self) -> dict:
+        """Recursive listing. Returns ok, tree[{name,folders,notes}].
+        Top-level result has name=''."""
+        def walk(base: Path):
+            try:
+                children = sorted(base.iterdir(), key=lambda p: (not p.is_dir(), p.name.lower()))
+            except Exception:
+                return []
+            out = []
+            for p in children:
+                if p.name.startswith("."):
+                    continue
+                try:
+                    rel = p.relative_to(self.notes_dir.resolve())
+                    full = str(rel).replace("\\", "/")
+                except ValueError:
+                    full = p.name
+                if p.is_dir():
+                    out.append({
+                        "name": full,
+                        "kind": "folder",
+                        "children": walk(p),
+                    })
+                elif self._note_ext_ok(p.name):
+                    out.append({
+                        "name": full,
+                        "kind": "note",
+                        "size": p.stat().st_size,
+                        "modified": p.stat().st_mtime,
+                    })
+            return out
+        return {"ok": True, "tree": walk(self.notes_dir)}
 
     def read_note(self, name: str) -> dict:
-        # Reject traversal / absolute paths.
-        if not name or "/" in name or "\\" in name or name.startswith("."):
-            return {"ok": False, "error": "invalid name"}
-        path = (self.notes_dir / name).resolve()
-        if self.notes_dir.resolve() not in path.parents and path != self.notes_dir.resolve():
-            return {"ok": False, "error": "invalid path"}
+        try:
+            path = self._safe_resolve(name)
+        except ValueError as e:
+            return {"ok": False, "error": str(e)}
         if not path.exists():
-            return {"ok": True, "content": "", "created": True}
-        return {"ok": True, "content": _safe_read(path), "mtime": path.stat().st_mtime}
+            return {"ok": True, "content": "", "created": True, "name": name}
+        return {"ok": True, "content": _safe_read(path), "mtime": path.stat().st_mtime,
+                "name": name}
 
     def save_note(self, name: str, content: str) -> dict:
-        if not name or "/" in name or "\\" in name or name.startswith("."):
-            return {"ok": False, "error": "invalid name"}
-        path = (self.notes_dir / name).resolve()
-        if self.notes_dir.resolve() not in path.parents and path != self.notes_dir.resolve():
-            return {"ok": False, "error": "invalid path"}
+        try:
+            path = self._safe_resolve(name)
+        except ValueError as e:
+            return {"ok": False, "error": str(e)}
+        # Auto-add .md if user omitted extension - but warn via flag.
+        ext_added = False
+        if not self._note_ext_ok(path.name):
+            path = path.with_name(path.name + ".md")
+            ext_added = True
         # Atomic write -> never truncates even if interrupted.
         _atomic_write(path, content)
-        # Update recent list.
-        self._push_recent(name)
-        # Stats: count words, accumulate minutes.
+        actual = str(path.relative_to(self.notes_dir.resolve())).replace("\\", "/")
+        self._push_recent(actual)
         words = len([w for w in content.split() if w])
         self._bump_stats(words_added=words)
-        return {"ok": True, "mtime": path.stat().st_mtime, "size": len(content)}
+        return {
+            "ok": True,
+            "mtime": path.stat().st_mtime,
+            "size": len(content),
+            "name": actual,
+            "extension_added": ext_added,
+        }
 
     def delete_note(self, name: str) -> dict:
-        if not name or "/" in name or "\\" in name or name.startswith("."):
-            return {"ok": False, "error": "invalid name"}
-        path = (self.notes_dir / name).resolve()
-        if self.notes_dir.resolve() not in path.parents and path != self.notes_dir.resolve():
-            return {"ok": False, "error": "invalid path"}
+        try:
+            path = self._safe_resolve(name)
+        except ValueError as e:
+            return {"ok": False, "error": str(e)}
+        if not path.is_file():
+            return {"ok": True, "existed": False}
         try:
             path.unlink()
         except FileNotFoundError:
             pass
         return {"ok": True}
 
-    def new_note(self, name: str | None, kind: str = "note") -> dict:
-        """Create a blank note or a todolist stub."""
+    def new_note(self, name: str | None = None, kind: str = "note",
+                 folder: str = "") -> dict:
+        """Create a blank note or a todolist stub.
+
+        Returns {ok, name, folder, extension_added}.
+        `extension_added` is True when the user-supplied name lacked
+        .md/.txt and Jottr auto-appended .md (so the UI can warn)."""
         ext = ".md"
         base = (name or "").strip()
+        ext_added = False
         if not base:
             ts = datetime.now().strftime("%Y-%m-%d-%H%M%S")
             base = "note" if kind == "note" else "todo"
-            name = f"{base}-{ts}{ext}"
+            file_name = f"{base}-{ts}{ext}"
         else:
-            if not (base.endswith(".md") or base.endswith(".txt")):
-                name = base + ext
-        path = self.notes_dir / name
+            if not self._note_ext_ok(base):
+                file_name = base + ext
+                ext_added = True
+            else:
+                file_name = base
+        folder = (folder or "").replace("\\", "/").strip("/")
+        if folder:
+            full_name = folder + "/" + file_name
+        else:
+            full_name = file_name
+        try:
+            path = self._safe_resolve(full_name)
+        except ValueError as e:
+            return {"ok": False, "error": str(e)}
         if path.exists():
-            # Don't clobber - append suffix.
             i = 2
             while True:
-                candidate = path.with_stem(path.stem + f"-{i}")
-                if not candidate.exists():
-                    name = candidate.name
-                    path = candidate
+                cand = path.with_name(path.stem + f"-{i}" + path.suffix)
+                if not cand.exists():
+                    actual_name = str(cand.relative_to(self.notes_dir.resolve())).replace("\\", "/")
+                    path = cand
                     break
                 i += 1
+            full_name = actual_name
+        else:
+            full_name = str(path.relative_to(self.notes_dir.resolve())).replace("\\", "/")
+        path.parent.mkdir(parents=True, exist_ok=True)
         content = "**todolist**\n\n- [ ] " if kind == "todo" else ""
         _atomic_write(path, content)
-        self._push_recent(name)
-        return {"ok": True, "name": name}
+        self._push_recent(full_name)
+        return {
+            "ok": True,
+            "name": full_name,
+            "folder": folder,
+            "extension_added": ext_added,
+        }
+
+    # -- Folders -----------------------------------------------------------
+    def create_folder(self, name: str, parent: str = "") -> dict:
+        """Create a new folder. `name` may be a nested path like
+        'projects/2024' - intermediate folders are created on the fly."""
+        if not name or not isinstance(name, str):
+            return {"ok": False, "error": "invalid folder name"}
+        clean = name.replace("\\", "/").strip("/")
+        if not clean:
+            return {"ok": False, "error": "invalid folder name"}
+        for seg in clean.split("/"):
+            if not seg or seg in (".", "..") or seg.startswith("."):
+                return {"ok": False, "error": "invalid folder name"}
+        parent = (parent or "").replace("\\", "/").strip("/")
+        full = (parent + "/" if parent else "") + clean
+        try:
+            path = self._safe_resolve(full)
+        except ValueError as e:
+            return {"ok": False, "error": str(e)}
+        if path.exists():
+            return {"ok": False, "error": "already exists"}
+        try:
+            path.mkdir(parents=True)
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+        return {"ok": True, "name": full}
+
+    def delete_folder(self, name: str, parent: str = "") -> dict:
+        name = (name or "").strip().strip("/")
+        if not name:
+            return {"ok": False, "error": "invalid folder name"}
+        parent = (parent or "").replace("\\", "/").strip("/")
+        full = (parent + "/" if parent else "") + name
+        try:
+            path = self._safe_resolve(full)
+        except ValueError as e:
+            return {"ok": False, "error": str(e)}
+        if not path.is_dir():
+            return {"ok": False, "error": "not a folder"}
+        visible = [c for c in path.iterdir() if not c.name.startswith(".")]
+        if visible:
+            return {"ok": False, "error": "folder is not empty"}
+        try:
+            path.rmdir()
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+        return {"ok": True, "name": full}
+
+    def rename_folder(self, old: str, new_name: str, parent: str = "") -> dict:
+        new_name = (new_name or "").strip().strip("/")
+        if not new_name or "/" in new_name or "\\" in new_name \
+                or new_name in (".", "..") or new_name.startswith("."):
+            return {"ok": False, "error": "invalid folder name"}
+        parent = (parent or "").replace("\\", "/").strip("/")
+        old_full = (parent + "/" if parent else "") + old
+        new_full = (parent + "/" if parent else "") + new_name
+        try:
+            old_path = self._safe_resolve(old_full)
+            new_path = self._safe_resolve(new_full)
+        except ValueError as e:
+            return {"ok": False, "error": str(e)}
+        if not old_path.is_dir():
+            return {"ok": False, "error": "not a folder"}
+        if new_path.exists():
+            return {"ok": False, "error": "destination exists"}
+        try:
+            old_path.rename(new_path)
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+        return {"ok": True, "name": new_full}
+
+    def move_note(self, name: str, new_folder: str) -> dict:
+        """Move a note into a different folder (or "" = root)."""
+        try:
+            src = self._safe_resolve(name)
+        except ValueError as e:
+            return {"ok": False, "error": str(e)}
+        if not src.is_file():
+            return {"ok": False, "error": "not a note"}
+        new_folder = (new_folder or "").replace("\\", "/").strip("/")
+        new_full = (new_folder + "/" if new_folder else "") + src.name
+        try:
+            dst = self._safe_resolve(new_full)
+        except ValueError as e:
+            return {"ok": False, "error": str(e)}
+        if dst.exists():
+            return {"ok": False, "error": "destination exists"}
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            src.rename(dst)
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+        return {"ok": True, "name": new_full}
 
     def open_external(self, suggested_name: str = "imported.md") -> dict:
         """Show a native file-open dialog, read the chosen file, import it."""
@@ -350,22 +623,32 @@ class JottrAPI:
         if stats.get("minutes_today_date") != today:
             stats["minutes_today"] = 0
             stats["minutes_today_date"] = today
-        # Build 7-day series from recent file mtimes.
+        # Build 7-day series from recent file mtimes (walks folders).
         series = []
         for i in range(6, -1, -1):
             d = datetime.now() - timedelta(days=i)
             key = d.strftime("%Y-%m-%d")
             series.append({"date": key, "label": d.strftime("%a"), "count": 0})
-        for p in self.notes_dir.glob("*"):
+        def walk(d: Path):
             try:
-                st = p.stat()
-                key = datetime.fromtimestamp(st.st_mtime).strftime("%Y-%m-%d")
-                for slot in series:
-                    if slot["date"] == key:
-                        slot["count"] += 1
-                        break
+                for p in d.iterdir():
+                    if p.name.startswith("."):
+                        continue
+                    if p.is_dir():
+                        walk(p)
+                        continue
+                    try:
+                        st = p.stat()
+                        key = datetime.fromtimestamp(st.st_mtime).strftime("%Y-%m-%d")
+                        for slot in series:
+                            if slot["date"] == key:
+                                slot["count"] += 1
+                                break
+                    except Exception:
+                        continue
             except Exception:
-                continue
+                pass
+        walk(self.notes_dir)
         return {"ok": True, "stats": stats, "series": series}
 
     # -- Window actions ----------------------------------------------------

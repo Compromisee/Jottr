@@ -834,3 +834,166 @@ code {
   background: var(--accent-soft);
   color: var(--accent);
 }
+
+/* =========================================================== Home search */
+.home-search-bar {
+  display: flex; align-items: center; gap: 8px;
+  margin: 18px 0 8px;
+  padding: 6px 10px;
+  background: var(--bg-elev);
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  transition: border-color 120ms;
+}
+.home-search-bar:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.home-search-bar .material-symbols-outlined {
+  color: var(--fg-mute);
+  font-size: 20px;
+}
+.home-search-bar input {
+  flex: 1;
+  border: none;
+  background: transparent;
+  color: var(--fg);
+  font-size: 15px;
+  outline: none;
+  padding: 6px 0;
+}
+.home-search-bar input::placeholder { color: var(--fg-faint); }
+.home-search-bar .iconbtn { width: 28px; height: 28px; }
+
+.home-search-wrap {
+  background: var(--bg-elev);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  margin: 4px 0 14px;
+  max-height: 280px;
+  overflow-y: auto;
+}
+.home-recent li .search-line {
+  display: flex; flex-direction: column; gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+.home-recent li .search-snippet {
+  font-size: 12px; color: var(--fg-mute);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.home-recent li .search-line strong {
+  color: var(--fg); font-weight: 600; font-size: 13.5px;
+}
+
+/* =========================================================== Settings accent row */
+.accent-row {
+  display: flex; gap: 8px; align-items: center;
+}
+.accent-row input[type="color"] {
+  width: 44px; height: 36px;
+  padding: 2px;
+  border-radius: 8px;
+  background: var(--bg-elev-2);
+  border: 1px solid var(--line-strong);
+  cursor: pointer;
+}
+.accent-row input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+.accent-row input[type="color"]::-webkit-color-swatch {
+  border: none; border-radius: 6px;
+}
+.accent-row select { flex: 1; }
+
+/* =========================================================== Folder tree (sidebar) */
+.folder-tree {
+  font-size: 13px;
+}
+.folder-tree ul {
+  list-style: none; margin: 0; padding: 0;
+}
+.folder-tree li { position: relative; }
+.folder-row, .tree-file {
+  display: flex; align-items: center; gap: 6px;
+  padding: 4px 6px; border-radius: 6px;
+  cursor: pointer; user-select: none;
+  color: var(--fg);
+}
+.folder-row:hover, .tree-file:hover {
+  background: var(--bg-elev-2);
+}
+.folder-row.selected, .tree-file.is-active {
+  background: var(--accent-soft);
+  color: var(--fg);
+}
+.folder-row .chev, .tree-file .chev {
+  width: 16px; height: 16px;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: var(--fg-mute);
+  font-size: 16px;
+  transition: transform 120ms;
+}
+.folder-row.collapsed .chev { transform: rotate(-90deg); }
+.folder-row .material-symbols-outlined.folder-ico {
+  color: var(--accent);
+  font-size: 18px;
+}
+.tree-file .material-symbols-outlined.file-ico {
+  color: var(--fg-mute);
+  font-size: 16px;
+}
+.tree-children {
+  margin-left: 18px;
+  border-left: 1px solid var(--line);
+  padding-left: 4px;
+  overflow: hidden;
+  max-height: 1200px;
+  transition: max-height 200ms;
+}
+.folder-row.collapsed + .tree-children {
+  max-height: 0;
+}
+.tree-file .label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.folder-row .label { flex: 1; }
+#folder-add { width: 24px; height: 24px; }
+#folder-add .material-symbols-outlined { font-size: 18px; color: var(--accent); }
+
+/* =========================================================== Move-to-folder modal */
+.move-card { width: 420px; }
+.folder-pick { list-style: none; margin: 0; padding: 0; }
+.folder-pick li {
+  padding: 8px 10px; border-radius: 8px; cursor: pointer;
+  display: flex; align-items: center; gap: 8px;
+}
+.folder-pick li:hover { background: var(--bg-elev-2); }
+.folder-pick li.current { background: var(--accent-soft); cursor: not-allowed; }
+.folder-pick .material-symbols-outlined { color: var(--accent); }
+
+/* =========================================================== Smart links */
+.smart-link {
+  color: var(--accent-2);
+  text-decoration: underline;
+  text-decoration-color: var(--line-strong);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+  position: relative;
+  transition: color 120ms, text-decoration-color 120ms;
+}
+.smart-link:hover {
+  color: var(--accent);
+  text-decoration-color: var(--accent);
+}
+.smart-link .link-glyph {
+  display: inline-block;
+  font-size: 13px;
+  opacity: 0.45;
+  margin-left: 3px;
+  vertical-align: -1px;
+}
+.smart-link:hover .link-glyph { opacity: 1; }
+.smart-link .link-glyph.dummy { display: none; }
+
+/* =========================================================== Smart link in editor overlay */
+.h-link {
+  color: var(--accent-2);
+  border-bottom: 1px dashed var(--line-strong);
+}

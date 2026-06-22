@@ -95,6 +95,7 @@
     return {
       version: 1,
       theme: "midnight",
+      accent_color: "#7c5cff",
       app_pin_hash: "",
       pin_scope: "app",
       startup: false,
@@ -116,6 +117,33 @@
 
   function applyTheme(theme) {
     document.body.dataset.theme = theme || "midnight";
+    applyAccentColor(state.config && state.config.accent_color);
+  }
+
+  // Convert "#rrggbb" -> "rgba(r,g,b,a)" and lighten helper.
+  function hexToRgb(hex) {
+    const m = /^#?([0-9a-f]{6})$/i.exec((hex || "").trim());
+    if (!m) return null;
+    const n = parseInt(m[1], 16);
+    return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  }
+  function withAlpha(hex, a) {
+    const rgb = hexToRgb(hex);
+    if (!rgb) return null;
+    return "rgba(" + rgb[0] + "," + rgb[1] + "," + rgb[2] + "," + a + ")";
+  }
+  function lighten(hex, amount) {
+    const rgb = hexToRgb(hex);
+    if (!rgb) return hex;
+    const mix = rgb.map((c) => Math.min(255, Math.round(c + (255 - c) * amount)));
+    return "#" + mix.map((c) => c.toString(16).padStart(2, "0")).join("");
+  }
+  function applyAccentColor(hex) {
+    if (!hex || !hexToRgb(hex)) return;
+    document.documentElement.style.setProperty("--accent", hex);
+    document.documentElement.style.setProperty("--accent-2", lighten(hex, 0.25));
+    const soft = withAlpha(hex, 0.18);
+    if (soft) document.documentElement.style.setProperty("--accent-soft", soft);
   }
 
   // ----------------------------------------------------------- PIN gate
@@ -158,6 +186,31 @@
     $("#empty-new-note").addEventListener("click", (e) => { e.preventDefault(); newNote(); });
     $("#empty-new-todo").addEventListener("click", (e) => { e.preventDefault(); newTodo(); });
 
+    // Folder tree controls
+    const folderAdd = $("#folder-add");
+    if (folderAdd) {
+      folderAdd.addEventListener("click", (e) => {
+        e.preventDefault();
+        const name = prompt("Folder name (you can use 'a/b/c' for nested):", "New folder");
+        if (!name) return;
+        createFolderInteractive(name);
+      });
+    }
+
+    // Move-to-folder modal
+    const moveClose = $("#move-close");
+    if (moveClose) moveClose.addEventListener("click", closeMoveModal);
+    const moveModal = $("#move-modal");
+    if (moveModal) moveModal.addEventListener("click", (e) => {
+      if (e.target.id === "move-modal") closeMoveModal();
+    });
+
+    // Folder context menu
+    const ctxFolder = $("#ctx-folder");
+    if (ctxFolder) {
+      ctxFolder.addEventListener("click", onFolderContextMenuClick);
+    }
+
     // Settings modal
     $("#settings-close").addEventListener("click", closeSettings);
     $("#settings-cancel").addEventListener("click", closeSettings);
@@ -197,7 +250,59 @@
         else toast("No PIN set - open Settings to add one", "info");
       }
       else if (a === "theme") cycleTheme();
+      else if (a === "accent") {
+        // cycle through accent presets
+        const cur = state.config && state.config.accent_color;
+        const idx = ACCENT_PRESETS.indexOf((cur || "").toLowerCase());
+        const next = ACCENT_PRESETS[(idx + 1 + ACCENT_PRESETS.length) % ACCENT_PRESETS.length];
+        state.config.accent_color = next;
+        applyAccentColor(next);
+        if (hasApi()) pycall("update_settings", { accent_color: next }).catch(() => {});
+        toast("Accent: " + next, "palette");
+      }
     });
+
+    // Home search bar
+    const homeSearch = $("#home-search");
+    if (homeSearch) {
+      homeSearch.addEventListener("input", (e) => runHomeSearch(e.target.value));
+      homeSearch.addEventListener("keydown", (e) => {
+        if (e.key === "Escape") { e.preventDefault(); homeSearch.value = ""; runHomeSearch(""); }
+      });
+    }
+    const homeSearchClear = $("#home-search-clear");
+    if (homeSearchClear) {
+      homeSearchClear.addEventListener("click", () => {
+        if (homeSearch) homeSearch.value = "";
+        runHomeSearch("");
+        if (homeSearch) homeSearch.focus();
+      });
+    }
+
+    // Accent color picker live preview
+    const accentPicker = $("#set-accent");
+    if (accentPicker) {
+      accentPicker.addEventListener("input", (e) => {
+        applyAccentColor(e.target.value);
+      });
+    }
+    const accentPreset = $("#set-accent-preset");
+    if (accentPreset) {
+      accentPreset.addEventListener("change", (e) => {
+        if (!e.target.value) return;
+        $("#set-accent").value = e.target.value;
+        applyAccentColor(e.target.value);
+      });
+    }
+
+    // Hotkey dropdown - show custom input when "Custom..." is chosen
+    const hotkeySel = $("#set-hotkey");
+    if (hotkeySel) {
+      hotkeySel.addEventListener("change", () => {
+        const ci = $("#set-hotkey-custom");
+        if (ci) ci.style.display = (hotkeySel.value === "__custom__") ? "" : "none";
+      });
+    }
 
     // Recent + pinned list clicks (delegated)
     document.addEventListener("click", (e) => {
@@ -213,6 +318,7 @@
     $("#ctx-menu").addEventListener("click", onContextMenuClick);
     window.addEventListener("click", (e) => {
       if (!e.target.closest("#ctx-menu")) hideContextMenu();
+      if (!e.target.closest("#ctx-folder")) hideFolderContextMenu();
     });
     window.addEventListener("contextmenu", (e) => {
       const li = e.target.closest("[data-open-file]");
@@ -274,6 +380,7 @@
     $("#pin-overlay").classList.add("hidden");
     refreshRecent();
     refreshPinned();
+    refreshFolderTree();
     refreshStats();
     if (state.config && state.config.show_home && state.tabs.length === 0) {
       toggleHome(true);
@@ -303,20 +410,145 @@
     }
   }
 
-  async function newNote(name) {
+  // ----------------------------------------------------------- Folders
+  const state_folders = { tree: [], collapsed: {}, current: "" };
+
+  async function refreshFolderTree() {
+    if (!hasApi()) {
+      $("#folder-tree").innerHTML = '<div class="side-empty">Backend not ready</div>';
+      return;
+    }
+    try {
+      const r = await pycall("list_tree");
+      if (!r.ok) return;
+      state_folders.tree = r.tree || [];
+      renderFolderTree();
+    } catch (e) {
+      $("#folder-tree").innerHTML = '<div class="side-empty">Failed to load</div>';
+    }
+  }
+
+  function renderFolderTree() {
+    const root = $("#folder-tree");
+    if (!root) return;
+    root.innerHTML = "";
+    if (!state_folders.tree.length) {
+      root.innerHTML = '<div class="side-empty">No notes yet</div>';
+      return;
+    }
+    const ul = document.createElement("ul");
+    state_folders.tree.forEach((node) => {
+      ul.appendChild(renderTreeNode(node, 0));
+    });
+    root.appendChild(ul);
+  }
+
+  function renderTreeNode(node, depth) {
+    const li = document.createElement("li");
+    if (node.kind === "folder") {
+      const row = document.createElement("div");
+      row.className = "folder-row";
+      const collapsed = !!state_folders.collapsed[node.name];
+      if (collapsed) row.classList.add("collapsed");
+      if (state_folders.current === node.name) row.classList.add("selected");
+      const chev = document.createElement("span");
+      chev.className = "chev material-symbols-outlined";
+      chev.textContent = "expand_more";
+      const ico = document.createElement("span");
+      ico.className = "material-symbols-outlined folder-ico";
+      ico.textContent = collapsed ? "folder" : "folder_open";
+      const lbl = document.createElement("span");
+      lbl.className = "label";
+      lbl.textContent = basename(node.name);
+      row.append(chev, ico, lbl);
+      row.addEventListener("click", (e) => {
+        if (e.altKey) {
+          state_folders.current = node.name;
+          renderFolderTree();
+          toast("New notes will go to: " + (node.name || "root"), "folder");
+          return;
+        }
+        if (collapsed) delete state_folders.collapsed[node.name];
+        else state_folders.collapsed[node.name] = true;
+        renderFolderTree();
+      });
+      row.addEventListener("contextmenu", (e) => {
+        e.preventDefault();
+        showFolderContextMenu(e.clientX, e.clientY, node.name);
+      });
+      li.appendChild(row);
+
+      const children = document.createElement("div");
+      children.className = "tree-children";
+      if (!collapsed && node.children && node.children.length) {
+        const cul = document.createElement("ul");
+        node.children.forEach((c) => cul.appendChild(renderTreeNode(c, depth + 1)));
+        children.appendChild(cul);
+      } else if (!node.children || !node.children.length) {
+        const empty = document.createElement("div");
+        empty.className = "side-empty";
+        empty.style.padding = "2px 10px";
+        empty.textContent = "Empty";
+        children.appendChild(empty);
+      }
+      li.appendChild(children);
+    } else {
+      const row = document.createElement("div");
+      row.className = "tree-file";
+      row.dataset.openFile = node.name;
+      if (state.activeTab === node.name) row.classList.add("is-active");
+      const chev = document.createElement("span");
+      chev.className = "chev";
+      const ico = document.createElement("span");
+      ico.className = "material-symbols-outlined file-ico";
+      ico.textContent = "description";
+      const lbl = document.createElement("span");
+      lbl.className = "label";
+      lbl.textContent = basename(node.name);
+      row.append(chev, ico, lbl);
+      row.addEventListener("click", () => openTab(node.name));
+      row.addEventListener("contextmenu", (e) => {
+        e.preventDefault();
+        showContextMenu(e.clientX, e.clientY, node.name);
+      });
+      li.appendChild(row);
+    }
+    return li;
+  }
+
+  function basename(fullName) {
+    if (!fullName) return "";
+    const s = String(fullName).replace(/\\/g, "/");
+    const i = s.lastIndexOf("/");
+    return i < 0 ? s : s.substring(i + 1);
+  }
+
+  async function newNote(name, folder) {
     if (!hasApi()) { toast("Backend not ready", "error"); return; }
     try {
-      const out = await pycall("new_note", name || null, "note");
-      if (!out.ok) { toast("Could not create note", "error"); return; }
+      const target = folder != null ? folder : state_folders.current;
+      const out = await pycall("new_note", name || null, "note", target || "");
+      if (!out.ok) { toast("Could not create note: " + (out.error || ""), "error"); return; }
+      if (out.extension_added) {
+        toast("Saved as " + basename(out.name) + " (added .md)", "info");
+      }
       await openTab(out.name);
+      refreshFolderTree();
+      refreshRecent();
     } catch (e) { toast("Create failed: " + e.message, "error"); }
   }
-  async function newTodo() {
+  async function newTodo(name, folder) {
     if (!hasApi()) { toast("Backend not ready", "error"); return; }
     try {
-      const out = await pycall("new_note", null, "todo");
-      if (!out.ok) { toast("Could not create todo", "error"); return; }
+      const target = folder != null ? folder : state_folders.current;
+      const out = await pycall("new_note", name || null, "todo", target || "");
+      if (!out.ok) { toast("Could not create todo: " + (out.error || ""), "error"); return; }
+      if (out.extension_added) {
+        toast("Saved as " + basename(out.name) + " (added .md)", "info");
+      }
       await openTab(out.name);
+      refreshFolderTree();
+      refreshRecent();
     } catch (e) { toast("Create failed: " + e.message, "error"); }
   }
   async function openExternal() {
@@ -627,6 +859,29 @@
       ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
   }
 
+  // Detect whether a string looks like a URL.
+  function looksLikeUrl(s) {
+    return /^(https?:\/\/|www\.)/i.test(String(s || "").trim());
+  }
+
+  // Extract a short display name from a URL: last path segment,
+  // stripped of trailing slashes / .html / common file extensions.
+  function urlDisplayName(url) {
+    let s = String(url || "").trim();
+    try {
+      const u = new URL(s);
+      let path = u.pathname.replace(/\/+$/, "");
+      const parts = path.split("/").filter(Boolean);
+      let last = parts[parts.length - 1] || u.hostname || s;
+      last = last.replace(/\.(html?|php|aspx?|jsp)$/i, "");
+      return decodeURIComponent(last) || u.hostname;
+    } catch (e) {
+      s = s.replace(/^https?:\/\//i, "").replace(/\/+$/, "");
+      const parts = s.split("/").filter(Boolean);
+      return parts[parts.length - 1] || s;
+    }
+  }
+
   // Highlight used in the editor overlay (line-by-line, no inline HTML).
   function highlightMarkdown(src) {
     const lines = escapeHtml(src).split("\n");
@@ -645,8 +900,19 @@
       r = r.replace(/\*\*([^*]+)\*\*/g, '<span class="h-bold">**$1**</span>');
       r = r.replace(/\*([^*]+)\*/g, '<span class="h-emph">*$1*</span>');
       r = r.replace(/`([^`]+)`/g, '<span class="h-str">`$1`</span>');
-      r = r.replace(/\[([^\]]+)\]\(([^)]+)\)/g,
-        '<span class="h-tag">[$1]</span><span class="h-com">($2)</span>');
+      r = r.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (m, text, url) => {
+        // Smart links: if the link text is itself a URL, only show
+        // the "name" part in the editor. Keep full URL as a tooltip
+        // so the user can hover to see the target.
+        if (looksLikeUrl(text)) {
+          const disp = escapeHtml(urlDisplayName(text));
+          return '<span class="h-tag" title="' + escapeHtml(text) +
+                 '">[' + disp + ']</span>' +
+                 '<span class="h-com">(' + escapeHtml(url) + ')</span>';
+        }
+        return '<span class="h-tag">[' + text + ']</span>' +
+               '<span class="h-com">(' + escapeHtml(url) + ')</span>';
+      });
       r = r.replace(/\b(\d+)\b/g, '<span class="h-num">$1</span>');
       out.push(r);
     }
@@ -826,34 +1092,68 @@
   function renderPreview(tab) {
     if (!tab.previewEl) return;
     const content = tab.content || "";
+    tab.previewEl.innerHTML = "";
     if (tab.todoMode) {
-      tab.previewEl.innerHTML = renderPreviewTodoList(content);
+      renderPreviewTodoListDOM(tab, content, tab.previewEl);
     } else {
       tab.previewEl.innerHTML = renderPreviewMarkdown(content);
     }
   }
 
-  function renderPreviewTodoList(text) {
+  // Render the todo checklist as interactive DOM elements (not HTML
+  // strings) so the user can click the checkbox straight from preview
+  // mode. State changes write back to tab.content and re-render.
+  function renderPreviewTodoListDOM(tab, text, container) {
     const lines = text.split("\n");
     let startIdx = 0;
     while (startIdx < lines.length && lines[startIdx].trim() === "") startIdx++;
     if (lines[startIdx] && lines[startIdx].trim() === TODO_TRIGGER) startIdx++;
     if (lines[startIdx] && lines[startIdx].trim() === "") startIdx++;
+
     const items = [];
     for (let i = startIdx; i < lines.length; i++) {
       const m = lines[i].match(/^\s*-\s\[( |x|X)\]\s?(.*)$/);
-      if (m) items.push({ done: m[1].toLowerCase() === "x", text: escapeHtml(m[2]) });
-      else if (lines[i].trim() !== "") {
-        if (items.length) items[items.length - 1].text += "<br>" + escapeHtml(lines[i]);
-        else items.push({ done: false, text: escapeHtml(lines[i]) });
-      }
+      if (m) items.push({ done: m[1].toLowerCase() === "x", text: m[2] });
     }
-    if (!items.length) return '<p class="hint">No items.</p>';
-    return '<ul class="preview-todo-list">' + items.map((it) =>
-      '<li class="' + (it.done ? "done" : "") + '">' +
-      '<span class="todo-box"></span>' +
-      '<span class="todo-text">' + (it.text || "") + '</span></li>'
-    ).join("") + '</ul>';
+
+    if (!items.length) {
+      const empty = document.createElement("p");
+      empty.className = "hint";
+      empty.textContent = "No items yet.";
+      container.appendChild(empty);
+      return;
+    }
+
+    const ul = document.createElement("ul");
+    ul.className = "preview-todo-list";
+    items.forEach((it, idx) => {
+      const li = document.createElement("li");
+      li.className = it.done ? "done" : "";
+
+      const box = document.createElement("span");
+      box.className = "todo-box";
+      box.setAttribute("role", "checkbox");
+      box.setAttribute("aria-checked", it.done ? "true" : "false");
+      box.tabIndex = 0;
+      const onToggle = (e) => {
+        e.preventDefault();
+        toggleTodo(tab, idx);
+        flushSave(tab).catch(() => {});
+        renderPreview(tab);
+      };
+      box.addEventListener("click", onToggle);
+      box.addEventListener("keydown", (e) => {
+        if (e.key === " " || e.key === "Enter") onToggle(e);
+      });
+
+      const txt = document.createElement("span");
+      txt.className = "todo-text";
+      txt.textContent = it.text || "";
+
+      li.append(box, txt);
+      ul.appendChild(li);
+    });
+    container.appendChild(ul);
   }
 
   // Tiny Markdown -> HTML renderer for the preview pane.
@@ -939,8 +1239,25 @@
     s = s.replace(/`([^`]+)`/g, "<code>$1</code>");
     s = s.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
     s = s.replace(/\*([^*]+)\*/g, "<em>$1</em>");
-    s = s.replace(/\[([^\]]+)\]\(([^)]+)\)/g,
-      '<a href="$2" target="_blank" rel="noopener">$1</a>');
+    s = s.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (m, text, url) => {
+      const safeUrl = escapeHtml(url);
+      // Smart links: if the link text is itself a URL, display only
+      // the "name" part (last URL path segment) with the full URL as
+      // a tooltip. The link itself still navigates to `url` (the
+      // destination in parentheses). A small glyph hints that there
+      // is a URL.
+      if (looksLikeUrl(text)) {
+        const disp = escapeHtml(urlDisplayName(text));
+        const tooltip = escapeHtml(text);
+        return '<a class="smart-link" href="' + safeUrl +
+               '" data-url="' + safeUrl + '" target="_blank" rel="noopener" ' +
+               'title="' + tooltip + '">' + disp +
+               '<span class="link-glyph material-symbols-outlined">link</span></a>';
+      }
+      return '<a class="smart-link" href="' + safeUrl + '" target="_blank" ' +
+             'rel="noopener" title="' + safeUrl + '">' + text +
+             '<span class="link-glyph material-symbols-outlined">link</span></a>';
+    });
     return s;
   }
 
@@ -1081,11 +1398,23 @@
     try {
       const out = await pycall("save_note", tab.name, tab.content);
       if (out && out.ok) {
-        tab.dirty = false;
-        tab.mtime = out.mtime;
-        renderTabBar();
+        // Backend may have appended .md if our stored name lacked it.
+        if (out.name && out.name !== tab.name) {
+          tab.name = out.name;
+          tab.dirty = false;
+          tab.mtime = out.mtime;
+          renderTabBar();
+          if (out.extension_added) {
+            toast("Saved as " + basename(out.name) + " (added .md)", "info");
+          }
+        } else {
+          tab.dirty = false;
+          tab.mtime = out.mtime;
+          renderTabBar();
+        }
         setStatusSaved(new Date());
         refreshRecent();
+        refreshFolderTree();
         refreshStats();
       } else { setStatusError(); }
     } catch (e) { setStatusError(); }
@@ -1268,32 +1597,88 @@
     const m = $("#settings-modal");
     m.classList.remove("hidden");
     $("#set-theme").value = state.config.theme || "midnight";
+    $("#set-accent").value = state.config.accent_color || "#7c5cff";
+    $("#set-accent-preset").value = "";
     $("#set-fontsize").value = state.config.font_size || 14;
     $("#set-lineno").checked = state.config.show_line_numbers !== false;
     $("#set-wrap").checked = !!state.config.word_wrap;
     $("#set-startup").checked = !!state.config.startup;
     $("#set-tray").checked = state.config.minimize_to_tray !== false;
-    $("#set-hotkey").value = state.config.global_hotkey || "";
+    populateHotkeyDropdown(state.config.global_hotkey || "ctrl+alt+j");
     $("#set-pin-scope").value = state.config.pin_scope || "app";
     $("#set-context").checked = !!state.config.explorer_context_menu;
     $("#set-preview-default").checked = !!state.config.preview_default;
     $("#set-pin").value = "";
   }
   function closeSettings() { $("#settings-modal").classList.add("hidden"); }
+
+  // ----- Hotkey dropdown helpers -----
+  // Common presets the user can pick from. The dropdown value is the
+  // raw hotkey string accepted by the `keyboard` Python library.
+  const HOTKEY_PRESETS = [
+    { value: "ctrl+alt+j",     label: "Ctrl + Alt + J" },
+    { value: "ctrl+alt+n",     label: "Ctrl + Alt + N" },
+    { value: "ctrl+alt+t",     label: "Ctrl + Alt + T" },
+    { value: "ctrl+shift+j",   label: "Ctrl + Shift + J" },
+    { value: "ctrl+shift+space", label: "Ctrl + Shift + Space" },
+    { value: "ctrl+shift+y",   label: "Ctrl + Shift + Y" },
+    { value: "alt+space",      label: "Alt + Space" },
+    { value: "alt+z",          label: "Alt + Z" },
+    { value: "win+j",          label: "Win + J" },
+    { value: "f8",             label: "F8" },
+  ];
+  function populateHotkeyDropdown(current) {
+    const sel = $("#set-hotkey");
+    if (!sel) return;
+    const known = HOTKEY_PRESETS.find((p) => p.value === current);
+    sel.innerHTML = "";
+    HOTKEY_PRESETS.forEach((p) => {
+      const o = document.createElement("option");
+      o.value = p.value;
+      o.textContent = p.label;
+      sel.appendChild(o);
+    });
+    // Custom option
+    const custom = document.createElement("option");
+    custom.value = "__custom__";
+    custom.textContent = "Custom...";
+    sel.appendChild(custom);
+    if (known) sel.value = current;
+    else { sel.value = "__custom__"; }
+    // Reveal / hide custom input.
+    const customInput = $("#set-hotkey-custom");
+    if (customInput) {
+      customInput.style.display = (sel.value === "__custom__") ? "" : "none";
+      customInput.value = known ? "" : current;
+    }
+  }
+  function readHotkeyValue() {
+    const sel = $("#set-hotkey");
+    if (!sel) return "ctrl+alt+j";
+    if (sel.value === "__custom__") {
+      const v = ($("#set-hotkey-custom").value || "").trim();
+      return v || "ctrl+alt+j";
+    }
+    return sel.value || "ctrl+alt+j";
+  }
   async function saveSettings() {
     if (!hasApi()) { toast("Backend not ready", "error"); return; }
+    const accent = $("#set-accent").value.trim();
     const patch = {
       theme: $("#set-theme").value,
+      accent_color: /^#?[0-9a-f]{6}$/i.test(accent) ? (accent.startsWith("#") ? accent : "#" + accent) : undefined,
       font_size: parseInt($("#set-fontsize").value, 10) || 14,
       show_line_numbers: $("#set-lineno").checked,
       word_wrap: $("#set-wrap").checked,
       startup: $("#set-startup").checked,
       minimize_to_tray: $("#set-tray").checked,
-      global_hotkey: $("#set-hotkey").value.trim() || "ctrl+alt+j",
+      global_hotkey: readHotkeyValue(),
       pin_scope: $("#set-pin-scope").value,
       explorer_context_menu: $("#set-context").checked,
       preview_default: $("#set-preview-default").checked,
     };
+    // Drop undefined keys so backend doesn't overwrite with bad values.
+    Object.keys(patch).forEach((k) => patch[k] === undefined && delete patch[k]);
     const pin = $("#set-pin").value;
     if (pin && pin.length >= 3) {
       try {
@@ -1338,6 +1723,10 @@
 
   // ----------------------------------------------------------- Theme cycle
   const THEMES = ["midnight", "graphite", "dusk", "paper", "solar"];
+  const ACCENT_PRESETS = [
+    "#7c5cff", "#5cc8ff", "#58e1a8", "#ff8ad1", "#ffb86b",
+    "#ff6363", "#cb4b16", "#e8a16c",
+  ];
   function cycleTheme() {
     const cur = state.config && state.config.theme;
     const idx = THEMES.indexOf(cur);
@@ -1349,6 +1738,51 @@
       pycall("update_settings", { theme: next }).catch(() => {});
     }
     toast("Theme: " + next, "contrast");
+  }
+
+  // ----------------------------------------------------------- Search (home)
+  const state_search = { term: "", results: [] };
+  async function runHomeSearch(term) {
+    state_search.term = term || "";
+    const list = $("#home-search-results");
+    if (!list) return;
+    list.innerHTML = "";
+    if (!state_search.term.trim()) {
+      $("#home-search-wrap")?.classList.add("hidden");
+      return;
+    }
+    $("#home-search-wrap")?.classList.remove("hidden");
+    if (!hasApi()) {
+      list.innerHTML = '<li class="hint" style="padding:10px 12px">Search needs the backend.</li>';
+      return;
+    }
+    try {
+      const r = await pycall("search_notes", state_search.term.trim(), 30);
+      state_search.results = r.results || [];
+      if (!state_search.results.length) {
+        list.innerHTML = '<li class="hint" style="padding:10px 12px">No matches for &ldquo;' +
+          escapeHtml(state_search.term) + '&rdquo;.</li>';
+        return;
+      }
+      state_search.results.forEach((hit) => {
+        const li = document.createElement("li");
+        li.dataset.openFile = hit.name;
+        const icon = document.createElement("span");
+        icon.className = "material-symbols-outlined";
+        icon.textContent = hit.kind === "todo" ? "checklist" : "description";
+        const lbl = document.createElement("span");
+        lbl.className = "search-line";
+        lbl.innerHTML =
+          '<strong>' + escapeHtml(hit.name) + '</strong>' +
+          '<span class="search-snippet">' +
+            escapeHtml(hit.snippet || "") +
+          '</span>';
+        li.append(icon, lbl);
+        list.appendChild(li);
+      });
+    } catch (e) {
+      list.innerHTML = '<li class="hint" style="padding:10px 12px">Search failed.</li>';
+    }
   }
 
   // ----------------------------------------------------------- Context menu
@@ -1366,6 +1800,146 @@
     $("#ctx-menu").classList.add("hidden");
     ctxTarget = null;
   }
+
+  // ----------------------------------------------------------- Folder context menu
+  let ctxFolderTarget = null;
+  function showFolderContextMenu(x, y, folder) {
+    ctxFolderTarget = folder || "";
+    const m = $("#ctx-folder");
+    if (!m) return;
+    m.style.left = Math.min(x, window.innerWidth - 240) + "px";
+    m.style.top = Math.min(y, window.innerHeight - 240) + "px";
+    m.classList.remove("hidden");
+  }
+  function hideFolderContextMenu() {
+    $("#ctx-folder")?.classList.add("hidden");
+    ctxFolderTarget = null;
+  }
+  async function onFolderContextMenuClick(e) {
+    const btn = e.target.closest("button");
+    if (!btn || ctxFolderTarget == null) return;
+    const act = btn.dataset.fact;
+    const folder = ctxFolderTarget;
+    hideFolderContextMenu();
+    if (!hasApi()) { toast("Backend not ready", "error"); return; }
+    try {
+      if (act === "note") await newNote(null, folder);
+      else if (act === "todo") await newTodo(null, folder);
+      else if (act === "subfolder") {
+        const name = prompt("Subfolder name (you can use 'a/b/c' for nested):", "New folder");
+        if (!name) return;
+        await createFolderInteractive(name, folder);
+      } else if (act === "rename") {
+        const base = basename(folder);
+        const nn = prompt("Rename folder to:", base);
+        if (!nn || nn === base) return;
+        await renameFolderInteractive(folder, nn);
+      } else if (act === "delete") {
+        if (!confirm("Delete folder '" + folder + "' (must be empty)?")) return;
+        await deleteFolderInteractive(folder);
+      } else if (act === "reveal") {
+        await pycall("reveal_in_explorer", folder);
+      }
+    } catch (e) { toast("Action failed: " + e.message, "error"); }
+  }
+
+  async function createFolderInteractive(name, parent) {
+    if (!hasApi()) return;
+    try {
+      const r = await pycall("create_folder", name, parent || "");
+      if (!r.ok) { toast("Could not create folder: " + (r.error || ""), "error"); return; }
+      toast("Created folder " + r.name, "create_new_folder");
+      refreshFolderTree();
+    } catch (e) { toast("Folder failed: " + e.message, "error"); }
+  }
+  async function renameFolderInteractive(folder, newName) {
+    if (!hasApi()) return;
+    const parent = folder.includes("/") ? folder.substring(0, folder.lastIndexOf("/")) : "";
+    try {
+      const r = await pycall("rename_folder", basename(folder), newName, parent);
+      if (!r.ok) { toast("Rename failed: " + (r.error || ""), "error"); return; }
+      toast("Renamed to " + r.name, "drive_file_rename_outline");
+      refreshFolderTree();
+      refreshRecent();
+    } catch (e) { toast("Rename failed: " + e.message, "error"); }
+  }
+  async function deleteFolderInteractive(folder) {
+    if (!hasApi()) return;
+    try {
+      const parent = folder.includes("/") ? folder.substring(0, folder.lastIndexOf("/")) : "";
+      const r = await pycall("delete_folder", basename(folder), parent);
+      if (!r.ok) { toast("Delete failed: " + (r.error || ""), "error"); return; }
+      toast("Deleted folder " + r.name, "delete");
+      refreshFolderTree();
+    } catch (e) { toast("Delete failed: " + e.message, "error"); }
+  }
+
+  // ----------------------------------------------------------- Move-to-folder modal
+  let moveTarget = null;
+  async function openMoveModal(name) {
+    moveTarget = name;
+    if (!hasApi()) return;
+    $("#move-source").textContent = "Move " + name + " to:";
+    const list = $("#move-folders");
+    if (list) list.innerHTML = "";
+    try {
+      const r = await pycall("list_tree");
+      if (r && r.ok) {
+        addMoveOption("", "(root - no folder)");
+        (r.tree || []).forEach((node) => addAllFolders(node, ""));
+      }
+    } catch (e) {}
+    $("#move-modal").classList.remove("hidden");
+  }
+  function addMoveOption(folder, label) {
+    const list = $("#move-folders");
+    if (!list) return;
+    const li = document.createElement("li");
+    li.dataset.folder = folder;
+    const ico = document.createElement("span");
+    ico.className = "material-symbols-outlined";
+    ico.textContent = folder ? "folder" : "inbox";
+    const lbl = document.createElement("span");
+    lbl.textContent = label || "(root)";
+    li.append(ico, lbl);
+    if (moveTarget && folder && (moveTarget === folder ||
+        moveTarget.startsWith(folder + "/"))) {
+      li.classList.add("current");
+      li.title = "Cannot move into self or descendants";
+    }
+    li.addEventListener("click", () => {
+      if (li.classList.contains("current")) return;
+      performMove(folder);
+    });
+    list.appendChild(li);
+  }
+  function addAllFolders(node, prefix) {
+    const fullName = prefix ? prefix + "/" + basename(node.name) : node.name;
+    if (node.kind === "folder") {
+      addMoveOption(fullName, fullName || "(root)");
+      (node.children || []).forEach((c) => addAllFolders(c, fullName));
+    }
+  }
+  function closeMoveModal() {
+    $("#move-modal").classList.add("hidden");
+    moveTarget = null;
+  }
+  async function performMove(newFolder) {
+    if (!moveTarget) return;
+    const oldName = moveTarget;
+    closeMoveModal();
+    if (!hasApi()) return;
+    try {
+      const r = await pycall("move_note", oldName, newFolder || "");
+      if (!r.ok) { toast("Move failed: " + (r.error || ""), "error"); return; }
+      toast("Moved to " + (newFolder || "root"), "drive_file_move");
+      const tab = state.tabs.find((t) => t.name === oldName);
+      if (tab) tab.name = r.name;
+      refreshFolderTree();
+      refreshRecent();
+      renderTabBar();
+    } catch (e) { toast("Move failed: " + e.message, "error"); }
+  }
   async function onContextMenuClick(e) {
     const btn = e.target.closest("button");
     if (!btn || !ctxTarget) return;
@@ -1376,6 +1950,7 @@
     try {
       if (act === "open") openTab(name);
       else if (act === "pin") togglePin(name);
+      else if (act === "move") openMoveModal(name);
       else if (act === "reveal") await pycall("reveal_in_explorer", name);
       else if (act === "setpin") {
         const pin = prompt("Set a per-file PIN for " + name + " (leave empty to clear):");
@@ -1460,6 +2035,12 @@
         return;
       }
       if (k === "f") { e.preventDefault(); openFind(); return; }
+      if (k === "h") {
+        e.preventDefault();
+        toggleHome(true);
+        setTimeout(() => $("#home-search")?.focus(), 30);
+        return;
+      }
     }
 
     if (ctrl && !e.shiftKey && !e.altKey) {
