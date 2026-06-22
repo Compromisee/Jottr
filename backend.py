@@ -21,6 +21,7 @@ import platform
 import secrets
 import shutil
 import subprocess
+import re
 import sys
 import tempfile
 import threading
@@ -108,17 +109,20 @@ class JottrAPI:
 
     def _default_config(self) -> dict:
         return {
-            "version": 1,
+            "version": 2,
+            "app_version": "2.1",
             "theme": "midnight",
-            "accent_color": "#7c5cff",
+            "accent_color": "",
             "app_pin_hash": "",
-            "pin_scope": "app",            # "app" or "per_file"
+            "pin_scope": "app",
             "startup": False,
             "global_hotkey": "ctrl+alt+j",
             "minimize_to_tray": True,
             "show_home": True,
             "recent": [],
             "pinned": [],
+            "tags": {"notes": {}, "folders": {}},
+            "pins": {},
             "stats": {
                 "streak": 0,
                 "last_open_date": "",
@@ -131,6 +135,8 @@ class JottrAPI:
             "show_line_numbers": True,
             "word_wrap": False,
             "preview_default": False,
+            "plugins": {},
+            "sidebar_collapsed": {},
         }
 
     def _save_config(self) -> None:
@@ -147,6 +153,7 @@ class JottrAPI:
             "global_hotkey", "minimize_to_tray", "show_home",
             "explorer_context_menu", "font_size", "show_line_numbers",
             "word_wrap", "pinned", "preview_default",
+            "tags", "pins", "plugins", "sidebar_collapsed",
         }
         with self._lock:
             for k, v in patch.items():
@@ -192,6 +199,226 @@ class JottrAPI:
 
     def has_app_pin(self) -> dict:
         return {"required": bool(self.config.get("app_pin_hash"))}
+
+    # -- Color tags --------------------------------------------------------
+    def set_tag(self, name: str, color: str, kind: str = "note") -> dict:
+        """Set or clear the color tag for a note or folder.
+        color = "" clears the tag."""
+        try:
+            self._safe_resolve(name)
+        except ValueError as e:
+            return {"ok": False, "error": str(e)}
+        tags = self.config.setdefault("tags", {"notes": {}, "folders": {}})
+        bucket = tags.get(kind + "s")
+        if bucket is None:
+            return {"ok": False, "error": "invalid kind"}
+        key = name if kind == "note" else (name if name else "")
+        if not color:
+            bucket.pop(key, None)
+        else:
+            bucket[key] = color
+        self._save_config()
+        return {"ok": True, "name": name, "kind": kind, "color": color}
+
+    def get_tags(self) -> dict:
+        return self.config.get("tags", {"notes": {}, "folders": {}})
+
+    # -- Per-file / per-folder PIN (stored in config, not the file) ------
+    def set_pin(self, name: str, pin: str, kind: str = "note") -> dict:
+        """Set or clear a per-file / per-folder PIN. Stored as a hash
+        in config.json, NOT as a comment in the file itself."""
+        try:
+            self._safe_resolve(name)
+        except ValueError as e:
+            return {"ok": False, "error": str(e)}
+        pins = self.config.setdefault("pins", {})
+        key = name if kind == "note" else (name if name else "")
+        if not pin:
+            pins.pop(key, None)
+        else:
+            if len(pin) < 3:
+                return {"ok": False, "error": "PIN must be at least 3 characters."}
+            pins[key] = self._hash_pin(pin)
+        self._save_config()
+        return {"ok": True, "name": name, "kind": kind}
+
+    def check_pin(self, name: str, pin: str, kind: str = "note") -> dict:
+        """Returns whether the supplied pin unlocks name.
+        Checks the entry itself AND any parent folder (folder pins
+        apply to everything inside)."""
+        pins = self.config.get("pins", {}) or {}
+        # Check folder inheritance - if a parent folder has a pin, that
+        # pin is required before opening anything inside.
+        key = name if kind == "note" else (name if name else "")
+        # Walk up the path looking for folder pins.
+        if kind == "note" and name:
+            parts = name.replace("\\", "/").split("/")
+            # parts = ["work", "sub", "ideas.md"] - check ["work", "work/sub"]
+            for i in range(len(parts) - 1, 0, -1):
+                folder_key = "/".join(parts[:i])
+                if folder_key in pins:
+                    if not pin:
+                        return {"ok": False, "required": True,
+                                "scope": "folder", "folder": folder_key}
+                    try:
+                        algo, salt, want = pins[folder_key].split("$", 2)
+                    except ValueError:
+                        return {"ok": False, "error": "corrupt pin"}
+                    got = hashlib.sha256((salt + pin).encode("utf-8")).hexdigest()
+                    if not secrets.compare_digest(want, got):
+                        return {"ok": False, "scope": "folder",
+                                "folder": folder_key}
+                    pin = None  # Folder pin consumed; continue to file pin.
+        stored = pins.get(key)
+        if not stored:
+            return {"ok": True, "required": False}
+        if not pin:
+            return {"ok": False, "required": True, "scope": "file" if kind == "note" else "folder"}
+        try:
+            algo, salt, want = stored.split("$", 2)
+        except ValueError:
+            return {"ok": False, "error": "corrupt pin"}
+        got = hashlib.sha256((salt + pin).encode("utf-8")).hexdigest()
+        return {"ok": secrets.compare_digest(want, got), "scope": "file"}
+
+    # -- Plugins -----------------------------------------------------------
+    def list_plugins(self) -> dict:
+        """Scan app_dir for *.plugg files, parse their manifest and
+        return the list of plugins Jottr found."""
+        plugins = []
+        try:
+            for p in sorted(self.app_dir.glob("*.plugg")):
+                try:
+                    txt = _safe_read(p)
+                except Exception:
+                    continue
+                meta = self._parse_plugg(txt)
+                if not meta:
+                    continue
+                meta["file"] = p.name
+                meta["enabled"] = bool(
+                    self.config.get("plugins", {}).get(meta["id"], {}).get("enabled", False))
+                plugins.append(meta)
+        except Exception:
+            pass
+        return {"ok": True, "plugins": plugins}
+
+    def _parse_plugg(self, text: str) -> dict:
+        """Parse the simple .plugg manifest format (see syntax.plugg).
+
+        Sections delimited by `=name=` headers. The =meta= section
+        is flattened into the top-level dict (id, name, version,
+        author, description). =runtime=, =features=, =hooks= and
+        =tags= are kept under their own keys.
+        """
+        meta = {}
+        cur_section = None
+        # For the meta section, accumulate continuation lines for
+        # the same key (e.g. multi-line description).
+        cur_key = None
+        cur_value = []
+        for raw in text.splitlines():
+            line = raw.rstrip()
+            if not line.strip() or line.lstrip().startswith("#"):
+                continue
+            if line.startswith("=") and line.endswith("="):
+                # flush any pending meta key before switching.
+                if cur_section == "meta" and cur_key is not None:
+                    if cur_key in meta:
+                        meta[cur_key] = str(meta[cur_key]) + "\n" + "\n".join(cur_value).strip()
+                    else:
+                        meta[cur_key] = "\n".join(cur_value).strip()
+                    cur_key = None
+                    cur_value = []
+                cur_section = line.strip("=").strip().lower()
+                continue
+            if cur_section == "meta":
+                m = re.match(r"^(\S+)(?:\s+(.*))?$", line)
+                if m:
+                    # Flush previous key.
+                    if cur_key is not None:
+                        if cur_key in meta:
+                            meta[cur_key] = str(meta[cur_key]) + "\n" + "\n".join(cur_value).strip()
+                        else:
+                            meta[cur_key] = "\n".join(cur_value).strip()
+                    cur_key = m.group(1).lower()
+                    cur_value = [(m.group(2) or "").strip()]
+                elif cur_key is not None:
+                    cur_value.append(line.strip())
+            elif cur_section == "runtime":
+                m = re.match(r"^(\S+)\s+(.*)$", line)
+                if m:
+                    meta.setdefault("runtime", {})[m.group(1).lower()] = m.group(2).strip()
+            elif cur_section == "features":
+                if line.startswith("feature "):
+                    meta.setdefault("features", []).append(line[len("feature "):].strip())
+            elif cur_section == "hooks":
+                if line.startswith("hook "):
+                    meta.setdefault("hooks", []).append(line[len("hook "):].strip())
+            elif cur_section == "tags":
+                for tag in line.split(","):
+                    tag = tag.strip()
+                    if tag:
+                        meta.setdefault("tags", []).append(tag)
+        # Final flush for the last meta key.
+        if cur_section == "meta" and cur_key is not None:
+            if cur_key in meta:
+                meta[cur_key] = str(meta[cur_key]) + "\n" + "\n".join(cur_value).strip()
+            else:
+                meta[cur_key] = "\n".join(cur_value).strip()
+        if not meta.get("id") or not meta.get("name"):
+            return {}
+        return meta
+
+    def set_plugin_enabled(self, plugin_id: str, enabled: bool) -> dict:
+        plugins = self.config.setdefault("plugins", {})
+        entry = plugins.setdefault(plugin_id, {})
+        entry["enabled"] = bool(enabled)
+        self._save_config()
+        return {"ok": True, "id": plugin_id, "enabled": bool(enabled)}
+
+    def encrypt_file(self, name: str, password: str) -> dict:
+        """Encrypt a single note file using the bundled encryptor
+        plugin (XOR + base64). The password MUST match any existing
+        per-file PIN (we don't re-encrypt protected files silently)."""
+        from plugins import encrypt_decrypt  # lazy import
+        try:
+            self._safe_resolve(name)
+        except ValueError as e:
+            return {"ok": False, "error": str(e)}
+        path = (self.notes_dir / name)
+        if not path.is_file():
+            return {"ok": False, "error": "not a note"}
+        try:
+            txt = _safe_read(path)
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+        try:
+            out = encrypt_decrypt.encrypt(txt, password)
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+        _atomic_write(path, out)
+        return {"ok": True, "name": name, "size": len(out)}
+
+    def decrypt_file(self, name: str, password: str) -> dict:
+        from plugins import encrypt_decrypt
+        try:
+            self._safe_resolve(name)
+        except ValueError as e:
+            return {"ok": False, "error": str(e)}
+        path = (self.notes_dir / name)
+        if not path.is_file():
+            return {"ok": False, "error": "not a note"}
+        try:
+            txt = _safe_read(path)
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+        try:
+            out = encrypt_decrypt.decrypt(txt, password)
+        except Exception as e:
+            return {"ok": False, "error": "decryption failed (wrong password?)"}
+        _atomic_write(path, out)
+        return {"ok": True, "name": name, "size": len(out)}
 
     # -- Search -------------------------------------------------------------
     def search_notes(self, term, limit=20) -> dict:

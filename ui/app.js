@@ -116,8 +116,29 @@
   }
 
   function applyTheme(theme) {
-    document.body.dataset.theme = theme || "midnight";
-    applyAccentColor(state.config && state.config.accent_color);
+    document.documentElement.dataset.theme = theme || "midnight";
+    const cfg = state.config || {};
+    // Only apply a custom accent if the user explicitly set one that
+    // differs from the theme's default. Otherwise let the theme
+    // variable drive the accent so theme switches are visible.
+    const themeDefaultAccents = {
+      midnight: "#7c5cff",
+      graphite: "#5cc8ff",
+      dusk:     "#ff8a5c",
+      paper:    "#5a4ad1",
+      solar:    "#cb4b16",
+    };
+    const themeDefault = themeDefaultAccents[theme || "midnight"] || "#7c5cff";
+    const hasCustom = !!cfg.accent_color
+        && cfg.accent_color.toLowerCase() !== themeDefault.toLowerCase();
+    if (hasCustom) {
+      applyAccentColor(cfg.accent_color);
+    } else {
+      // Remove our inline accent override so the theme's CSS applies.
+      document.documentElement.style.removeProperty("--accent");
+      document.documentElement.style.removeProperty("--accent-2");
+      document.documentElement.style.removeProperty("--accent-soft");
+    }
   }
 
   // Convert "#rrggbb" -> "rgba(r,g,b,a)" and lighten helper.

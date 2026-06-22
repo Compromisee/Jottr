@@ -304,9 +304,12 @@ code {
 
 /* ---------- Home screen ---------------------------------------------- */
 .home-screen {
-  padding: 28px 32px;
+  padding: 28px 32px 60px;
   overflow-y: auto;
+  overflow-x: hidden;
   flex: 1;
+  min-height: 0;
+  scrollbar-gutter: stable;
 }
 .home-hero h1 {
   margin: 0 0 6px 0; font-size: 28px; font-weight: 700;
@@ -319,6 +322,7 @@ code {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
   gap: 14px;
+  align-content: start;
 }
 .widget {
   background: var(--bg-elev);
@@ -326,10 +330,19 @@ code {
   border-radius: var(--radius-lg);
   padding: 14px 16px;
   box-shadow: var(--shadow-1);
+  transition: border-color 200ms, transform 200ms;
+  animation: widget-in 360ms ease both;
+  position: relative;
+  overflow: hidden;
 }
+.widget:hover { border-color: var(--accent-soft); }
+.widget.collapsed .widget-body { display: none; }
+.widget.collapsed { padding-bottom: 8px; }
 .widget-head {
   display: flex; align-items: center; gap: 8px;
   margin-bottom: 10px;
+  cursor: pointer;
+  user-select: none;
 }
 .widget-head h4 {
   margin: 0; font-size: 13px; font-weight: 600;
@@ -997,3 +1010,125 @@ code {
   color: var(--accent-2);
   border-bottom: 1px dashed var(--line-strong);
 }
+
+/* =========================================================== Widget chrome */
+.widget-chev {
+  margin-left: auto !important;
+  color: var(--fg-faint);
+  font-size: 18px !important;
+  transition: transform 200ms;
+}
+.widget.collapsed .widget-chev { transform: rotate(-90deg); }
+.widget.collapsed .widget-body { display: none; }
+@keyframes widget-in {
+  from { opacity: 0; transform: translateY(8px) scale(0.98); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* =========================================================== Sidebar collapsibles */
+.side-section {
+  margin-bottom: 18px;
+  transition: margin-bottom 200ms;
+}
+.side-section.collapsed .side-body { display: none; }
+.side-section .side-chev {
+  margin-left: auto !important;
+  color: var(--fg-faint);
+  font-size: 16px !important;
+  transition: transform 200ms;
+}
+.side-section.collapsed .side-chev { transform: rotate(-90deg); }
+.side-section h3 {
+  display: flex; align-items: center; gap: 6px;
+  cursor: pointer; user-select: none;
+}
+.side-section h3:hover { color: var(--fg); }
+.side-section h3 .side-h-icon { color: var(--accent); opacity: 0.7; font-size: 14px; }
+.side-toggle-all {
+  background: transparent; border: none; padding: 4px;
+  color: var(--fg-mute); cursor: pointer;
+  font-size: 12px;
+}
+.side-toggle-all:hover { color: var(--accent); }
+
+/* =========================================================== Color tags */
+.tag-dot {
+  display: inline-block;
+  width: 9px; height: 9px;
+  border-radius: 50%;
+  margin-right: 6px;
+  vertical-align: middle;
+  box-shadow: 0 0 0 1px rgba(255,255,255,0.06) inset;
+  flex-shrink: 0;
+}
+.tag-dot.lg { width: 12px; height: 12px; }
+
+.folder-row .folder-ico,
+.tree-file .file-ico {
+  font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24;
+}
+
+.tag-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 8px;
+  margin: 6px 0 12px;
+}
+.tag-swatch {
+  aspect-ratio: 1;
+  border-radius: 50%;
+  cursor: pointer;
+  border: 2px solid transparent;
+  transition: border-color 120ms, transform 120ms;
+}
+.tag-swatch:hover { transform: scale(1.1); }
+.tag-swatch.selected { border-color: var(--fg); }
+.tag-swatch.none { background: var(--bg-elev-2); border: 1px dashed var(--line-strong); }
+
+/* =========================================================== Drag and drop into folders */
+.folder-row.dragover {
+  background: var(--accent-soft);
+  outline: 2px dashed var(--accent);
+  outline-offset: -2px;
+}
+.tree-file.dragging { opacity: 0.4; }
+
+/* =========================================================== Animations */
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: none; }
+}
+.animate-in { animation: fade-in 220ms ease both; }
+
+/* =========================================================== Plugin card */
+.plugin-card {
+  background: var(--bg-elev-2);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin-bottom: 10px;
+}
+.plugin-card .plugin-head {
+  display: flex; align-items: center; gap: 8px;
+}
+.plugin-card .plugin-name { font-weight: 600; }
+.plugin-card .plugin-version {
+  font-size: 11px; color: var(--fg-faint);
+  background: var(--bg-elev);
+  padding: 1px 6px;
+  border-radius: 4px;
+  margin-left: 6px;
+}
+.plugin-card .plugin-desc { font-size: 13px; color: var(--fg-mute); margin-top: 4px; }
+.plugin-card .plugin-actions { margin-top: 8px; display: flex; gap: 6px; flex-wrap: wrap; }
+
+/* =========================================================== Sidebar tag dots */
+.recent-list li .tag-dot,
+.folder-tree .tag-dot { flex-shrink: 0; }
+
+/* =========================================================== Sidebar narrow mode */
+.sidebar.narrow { width: 56px; }
+.sidebar.narrow .side-section h3 span:not(.side-chev):not(.side-h-icon) { display: none; }
+.sidebar.narrow .side-section h3 .side-chev { margin-left: 0; }
+.sidebar.narrow .side-body { display: none; }
+.sidebar.narrow .side-toggle-all { display: none; }
