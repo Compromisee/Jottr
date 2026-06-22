@@ -6,7 +6,7 @@
 
 **A tabbed notepad with atomic auto-save, PIN-protected files and a Windows-style home screen.**
 
-[![GitHub release](https://img.shields.io/github/v/release/yourname/jottr?style=flat-square)](../../releases)
+[![GitHub release](https://img.shields.io/github/v/release/Compromisee/Jottr?style=flat-square)](../../releases)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-7c5cff?style=flat-square)]()
 [![Python](https://img.shields.io/badge/python-3.9%2B-blue?style=flat-square)]()
 [![License](https://img.shields.io/badge/license-MIT-green?style=flat-square)]()
